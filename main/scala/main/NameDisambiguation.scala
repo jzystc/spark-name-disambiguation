@@ -1,7 +1,7 @@
 package main
 
 import main.AuthorNetwork.{buildML, save}
-import org.apache.spark.ml.classification.LogisticRegressionModel
+import org.apache.spark.ml.classification.{ClassificationModel, LogisticRegressionModel, MultilayerPerceptronClassificationModel}
 import org.apache.spark.sql.SparkSession
 import util._
 
@@ -16,7 +16,7 @@ object NameDisambiguation {
   var numPartition = 200
 
   //数据库表名
-  val name = "c_y_huang"
+  val name = "xu_xu"
   val path = "d:/namedis/"
 
   def prepare(ss: SparkSession): Unit = {
@@ -43,12 +43,14 @@ object NameDisambiguation {
 
   def disambiguate(ss: SparkSession): Unit = {
     //生成初始网络
-
-    val network = buildML(ss, path + name)
-    val lrModel = LogisticRegressionModel.load("d:/namedis/lr")
-    // val mpcModel = MultilayerPerceptronClassificationModel.load("/home/csubigdata/namedis/mpc")
-    val networkAfter = AuthorNetwork.runML(network, numPartition, lrModel)
-    save(networkAfter, path + name)
+    def run(): Unit ={
+      val network = buildML(ss, path + name)
+      //val lr = LogisticRegressionModel.load("d:/namedis/lr")
+      val mpc = MultilayerPerceptronClassificationModel.load("d:/namedis/mpc")
+      val networkAfter = AuthorNetwork.runML(network, numPartition, mpc)
+      save(networkAfter, path + name)
+    }
+//    run()
     val graph = AnalysisTool.loadGraph(ss, path + name)
     def all(): Unit ={
           val file = Source.fromURL(this.getClass.getResource("/resources/100.txt"))
@@ -70,7 +72,7 @@ object NameDisambiguation {
       //若在本地运行需要设置为local
       .master("local[*]")
       .getOrCreate()
-    prepare(ss)
+    //prepare(ss)
     //train(ss)
     disambiguate(ss)
     ss.stop()

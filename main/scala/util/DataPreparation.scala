@@ -2,6 +2,7 @@ package util
 
 import org.apache.spark.ml.feature.Word2VecModel
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.types.StringType
 
 object DataPreparation {
 
@@ -176,6 +177,13 @@ object DataPreparation {
 
     //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
     //    vertexDF = Training.fitTfIdf(vertexDF, "title", "titleVec")
+    //TODO:合并abstract和title
+
+    /*import org.apache.spark.sql.functions._
+       vertexDF.na.fill("",Array("abstract","title"))
+       vertexDF = vertexDF.select(concat_ws(",", vertexDF("title"),vertexDF("abstrct")).cast(StringType).as("text"))
+       vertexDF = GlobalTraining.trans(vertexDF, "text", "textVec", model)
+     */
     vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
     vertexDF = GlobalTraining.trans(vertexDF, "abstract", "abstractVec", model)
     vertexDF = GlobalTraining.trans(vertexDF, "title", "titleVec", model)

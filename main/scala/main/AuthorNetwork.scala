@@ -1,11 +1,15 @@
 package main
 
 import org.apache.spark.graphx.{Edge, Graph}
+import org.apache.spark.ml.Model
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.ml.linalg.{DenseVector, Vector}
+import org.apache.spark.ml.classification.ClassificationModel
 import org.apache.spark.sql.SparkSession
 import util.Similarity._
 import util.Weight
+
+import scala.reflect.ClassTag
 
 object AuthorNetwork {
   /**
@@ -33,6 +37,7 @@ object AuthorNetwork {
     * 5.摘要相似度
     **/
   type EdgeML = (Double, Double, Double, Double, Double)
+  //  type EdgeML = (Double, Double, Double, Double)
   /**
     * 定义节点属性的数据类型
     * 1.名字
@@ -44,6 +49,7 @@ object AuthorNetwork {
     */
   type VertexAttr = (String, String, Vector, Int, Vector, Vector)
 
+  //type VertexAttr = (String, String, Vector, String, Int, Vector)
   def buildML(ss: SparkSession, path: String): Graph[VertexAttr, EdgeML] = {
     val vIn = path + "/ml_input_v"
     val eIn = path + "/ml_input_e"
@@ -589,7 +595,7 @@ object AuthorNetwork {
     * @param partitionNum rdd分区数
     * @return
     */
-  def runML(g: Graph[VertexAttr, EdgeML], partitionNum: Int, model: LogisticRegressionModel): Graph[VertexAttr, EdgeML] = {
+  def runML[T<:ClassificationModel[Vector,T]](g: Graph[VertexAttr, EdgeML], partitionNum: Int, model:T): Graph[VertexAttr, EdgeML] = {
     g.cache()
     println("[初始化link相似分数]")
     //第一次更新link分数后的边数组

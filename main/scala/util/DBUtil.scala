@@ -55,20 +55,33 @@ object DBUtil {
   }
 
   /**
+    * 创建authors表和papers表
     *
-    * 读取文件中的作者名字,插入与这些名字有关的而数据到数据库中
+    * @param name 表名前缀
     */
-  def insertData(names: Array[String]): Unit = {
-    for (name <- names) {
-      PaperDao.createTable(name)
-      PaperDao.insertDataByName(table = name, name)
-      AuthorDao.createTable(name)
-      AuthorDao.insertDataByName(table = name, name)
-    }
+  def createTables(name: String): Unit = {
+    PaperDao.createTable(name)
+    AuthorDao.createTable(name)
+  }
+
+  /**
+    *
+    * 读取文件中的作者名字,插入与该名字有关的数据到指定表中
+    * @param table 表名
+    * @param name  作者名
+    */
+  def insertData(table: String, name: String): Unit = {
+
+    PaperDao.insertDataByName(table = table, name)
+    AuthorDao.insertDataByName(table = table, name)
+
   }
 
   def main(args: Array[String]): Unit = {
-    insertData(Array("c_y_huang"))
+
+    val name = "c_y_huang"
+    createTables(name)
+    insertData(name, name)
   }
 
 }
