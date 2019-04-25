@@ -136,11 +136,9 @@ object AuthorDao {
           ps.executeUpdate()
         }
       }
+    }catch{
+      case e:Exception=>
     }
-    /*catch {
-      case _: com.mysql.jdbc.exceptions.jdbc4.MySQLIntegrityConstraintViolationException =>
-      case ex: IOException => ex.printStackTrace()
-    }*/
     finally {
       conn.close()
     }
@@ -195,6 +193,8 @@ object AuthorDao {
     try {
       val stmt = conn.createStatement()
       stmt.executeUpdate(sql)
+    }catch{
+      case e:Exception=>
     }
     finally {
       conn.close()

@@ -16,7 +16,7 @@ object NameDisambiguation {
   var numPartition = 200
 
   //数据库表名
-  val name = "j_yu"
+  val name = "c_y_huang"
   val path = "d:/namedis/"
 
   def prepare(ss: SparkSession): Unit = {
@@ -56,8 +56,10 @@ object NameDisambiguation {
           val records = AnalysisTool.analyze(graph, names)
           CSVUtil.write(path + "100.csv", records = records)
     }
-
-    AnalysisTool.analyzeByName(graph, name)
+    def one(): Unit ={
+      AnalysisTool.analyzeByName(graph, name)
+    }
+    one()
   }
 
   def main(args: Array[String]): Unit = {

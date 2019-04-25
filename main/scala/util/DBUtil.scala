@@ -68,7 +68,7 @@ object DBUtil {
   }
 
   def main(args: Array[String]): Unit = {
-    insertData(Array("j_yu"))
+    insertData(Array("c_y_huang"))
   }
 
 }

@@ -117,11 +117,9 @@ object PaperDao {
         ps.setObject(5, paper.venue)
         ps.executeUpdate()
       }
+    }catch{
+      case e:Exception=>
     }
-    /*catch {
-      case _: com.mysql.jdbc.exceptions.jdbc4.MySQLIntegrityConstraintViolationException =>
-      case ex: IOException => ex.printStackTrace()
-    }*/
     finally {
       conn.close()
     }
@@ -145,6 +143,8 @@ object PaperDao {
     try {
       val stmt = conn.createStatement()
       stmt.executeUpdate(sql)
+    }catch{
+      case e:Exception=>
     }
     finally {
       conn.close()
