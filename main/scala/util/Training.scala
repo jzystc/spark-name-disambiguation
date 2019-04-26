@@ -4,7 +4,7 @@ import java.io.{File, FileOutputStream, PrintWriter}
 
 import main.AuthorNetwork.{EdgeML, VertexAttr}
 import org.apache.spark.graphx.{Edge, Graph}
-import org.apache.spark.ml.classification.{LogisticRegression, LogisticRegressionModel, MultilayerPerceptronClassificationModel, MultilayerPerceptronClassifier}
+import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.ml.feature.{HashingTF, IDF, Tokenizer, Word2Vec}
 import org.apache.spark.ml.linalg.SparseVector
@@ -15,8 +15,9 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 object Training {
   /**
     * 从图的边rdd中构造包含作者名字的训练数据
-    * @param ss
-    * @param graph
+    *
+    * @param ss SparkSession
+    * @param graph 作者网络图
     * @return
     */
   def getDataIncludingName(ss: SparkSession, graph: Graph[VertexAttr, EdgeML]): DataFrame = {
@@ -33,6 +34,7 @@ object Training {
 
   /**
     * 从图的边rdd中构造不包含作者名字的训练数据
+    *
     * @param ss
     * @param graph
     * @return
@@ -51,6 +53,7 @@ object Training {
 
   /**
     * 训练tfidf模型，将文献数据转换为向量表示
+    *
     * @param srcDF
     * @param inputCol
     * @param outputCol
@@ -179,19 +182,34 @@ object Training {
     model
   }
 
+  def trainByLSVC(ss: SparkSession, data: DataFrame): LinearSVCModel = {
+
+    val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
+    val lsvc = new LinearSVC()
+      .setMaxIter(10)
+      .setRegParam(0.1)
+
+    // Fit the model
+    val lsvcModel = lsvc.fit(training)
+
+    // Print the coefficients and intercept for linear svc
+    println(s"Coefficients: ${lsvcModel.coefficients} Intercept: ${lsvcModel.intercept}")
+    lsvcModel
+  }
+
   /**
     * 训练逻辑回归分类器
     *
-    * @param ss sparksession
+    * @param ss   sparksession
     * @param data 用于训练的原始数据
     */
   def trainByLR(ss: SparkSession, data: DataFrame): LogisticRegressionModel = {
     val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
 
     val lr = new LogisticRegression()
-      .setMaxIter(10)
+      .setMaxIter(100)
       .setFamily("binomial")
-    //1: l2 ridge岭回归 0: l1 lasso回归
+    //1: l2 ridge regression 0: l1 lasso regression
     //.setElasticNetParam(1)mkdir data
 
     // We use a ParamGridBuilder to construct a grid of parameters to search over.
@@ -201,6 +219,7 @@ object Training {
 
       .addGrid(lr.regParam, (0.01 to 0.1 by 0.01).toArray)
       .addGrid(lr.fitIntercept)
+      //.addGrid(lr.threshold,(0.3 to 0.8 by 0.1).toArray)
       .addGrid(lr.elasticNetParam, (0.0 to 1.0 by 0.1).toArray)
       .build()
 
@@ -249,9 +268,9 @@ object Training {
     val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
       .select("threshold").head().getDouble(0)
     //
-    println(s"Coefficients: ${lrModel.coefficients} Intercept: ${lrModel.intercept}")
-    println(s"bestThreshold: $bestThreshold maxFMeasure: $maxFMeasure")
-    //    lrModel.setThreshold(bestThreshold)
+    //println(s"Coefficients: ${lrModel.coefficients} Intercept: ${lrModel.intercept}")
+    //println(s"bestThreshold: $bestThreshold maxFMeasure: $maxFMeasure")
+    lrModel.setThreshold(bestThreshold)
     //    lrModel
 
     result.createTempView("pred")
@@ -270,6 +289,27 @@ object Training {
     println(s"fscore=$fscore")
     ss.catalog.dropTempView("pred")
     lrModel
+  }
+
+  def trainByNB(ss: SparkSession, data: DataFrame): NaiveBayesModel = {
+    // Load and parse the data file.
+    // Split data into training (60%) and test (40%).
+    val Array(training, test) = data.randomSplit(Array(0.8, 0.2))
+    val model = new NaiveBayes()
+      .fit(training)
+
+    val predictions = model.transform(test)
+    predictions.show()
+
+    // Select (prediction, true label) and compute test error
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
+    val accuracy = evaluator.evaluate(predictions)
+    println(s"Test set accuracy = $accuracy")
+
+    model
   }
 
   def main(args: Array[String]): Unit = {

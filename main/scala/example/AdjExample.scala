@@ -71,17 +71,18 @@ object AdjExample {
       */
     def vprog(vid: VertexId, vdata: VMap, message: VMap) //每轮迭代后都会用此函数来更新节点的数据（利用消息更新本身），vdata为本身数据，message为消息数据
     : Map[VertexId, Int] = addMaps(vdata, message)
+
     /**
       * 节点数据的更新 就是集合的union
       */
-    def sendMsg(e: EdgeTriplet[VMap, _]) = {
+    def sendMsg(e: EdgeTriplet[VMap, _]): Iterator[(VertexId, Map[VertexId, PartitionID])] = {
       //取两个集合的差集  然后将生命值减1
       val srcMap = (e.dstAttr.keySet -- e.srcAttr.keySet).map { k => k -> (e.dstAttr(k) - 1) }.toMap
       val dstMap = (e.srcAttr.keySet -- e.dstAttr.keySet).map { k => k -> (e.srcAttr(k) - 1) }.toMap
       if (srcMap.isEmpty)
         Iterator.empty
       else
-        Iterator((e.dstId, dstMap), (e.srcId, srcMap)) //发送消息的内容
+        Iterator((e.srcId, srcMap)) //发送消息的内容
     }
 
     /**
@@ -106,7 +107,10 @@ object AdjExample {
     //过滤得到二跳邻居 就是value=0 的顶点    
     val twoJumpFirends = newG.vertices
       .mapValues(_.filter(_._2 == 0).keys) //由于在第二轮迭代，源节点会将自己的邻居（非目标节点）推荐给目标节点——各个邻居就是目标节点的二跳邻居，并将邻居对应的值减为0，    
-    //twoJumpFirends.collect().foreach(println(_))    
-    twoJumpFirends.filter(x => x._2 != Set()).foreach(println(_)) //把二跳邻居集合非空的（点，{二跳邻居集合}）打印出来
+    //twoJumpFirends.collect().foreach(println(_))
+
+    //    twoJumpFirends.filter(x => x._2 != Set()).foreach(println(_)) //把二跳邻居集合非空的（点，{二跳邻居集合}）打印出来
+    val result = twoJumpFirends.filter(x => x._2 != Set()).map(x => x._2.map(y => (x._1, y))).reduce(_ ++ _).toSet
+    result.foreach(println(_))
   }
 }
