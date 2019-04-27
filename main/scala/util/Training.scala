@@ -16,7 +16,7 @@ object Training {
   /**
     * 从图的边rdd中构造包含作者名字的训练数据
     *
-    * @param ss SparkSession
+    * @param ss    SparkSession
     * @param graph 作者网络图
     * @return
     */
@@ -133,7 +133,7 @@ object Training {
   /**
     * 训练多层感知器分类器
     */
-  def trainByMPC(ss: SparkSession, data: DataFrame): MultilayerPerceptronClassificationModel = {
+  def trainByMPC(ss: SparkSession, data: DataFrame, maxIter: Int = 10): MultilayerPerceptronClassificationModel = {
 
     val splits = data.randomSplit(Array(0.8, 0.2), seed = 1234L)
     val train = splits(0)
@@ -151,7 +151,7 @@ object Training {
       .setLayers(layers)
       .setBlockSize(128)
       .setSeed(1234L)
-      .setMaxIter(100)
+      .setMaxIter(maxIter)
 
     // train the model
     val model = trainer.fit(train)
@@ -182,11 +182,11 @@ object Training {
     model
   }
 
-  def trainByLSVC(ss: SparkSession, data: DataFrame): LinearSVCModel = {
+  def trainByLSVC(ss: SparkSession, data: DataFrame, maxIter: Int = 10): LinearSVCModel = {
 
     val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
     val lsvc = new LinearSVC()
-      .setMaxIter(10)
+      .setMaxIter(maxIter)
       .setRegParam(0.1)
 
     // Fit the model
@@ -203,11 +203,11 @@ object Training {
     * @param ss   sparksession
     * @param data 用于训练的原始数据
     */
-  def trainByLR(ss: SparkSession, data: DataFrame): LogisticRegressionModel = {
+  def trainByLR(ss: SparkSession, data: DataFrame, maxIter: Int = 10): LogisticRegressionModel = {
     val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
 
     val lr = new LogisticRegression()
-      .setMaxIter(100)
+      .setMaxIter(maxIter)
       .setFamily("binomial")
     //1: l2 ridge regression 0: l1 lasso regression
     //.setElasticNetParam(1)mkdir data

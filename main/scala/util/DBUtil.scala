@@ -79,7 +79,7 @@ object DBUtil {
 
   def main(args: Array[String]): Unit = {
 
-    val name = "c_y_huang"
+    val name = "hongbin_liang"
     createTables(name)
     insertData(name, name)
   }

@@ -34,8 +34,8 @@ object AnalysisTool {
     graph
   }
 
-  def getPairsByEdges(graph: Graph[String, Double], name: String): Set[(Long, Long)] = {
-    val resultRDD = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
+  def get1JumpPair(graph: Graph[String, Double]): Set[(Long, Long)] = {
+    val resultRDD = graph.triplets.filter(x => x.attr == 1.0)
       .map(x => (x.srcId, x.dstId))
     val result = resultRDD.collect().toSet
     result
@@ -49,10 +49,13 @@ object AnalysisTool {
     *
     */
   def getComponentsRDD(graph: Graph[String, Double], name: String): RDD[Array[Long]] = {
+
+
     val edgeRDD = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
       .map(x => Edge(x.srcId, x.dstId, x.attr))
     val vertexRDD = graph.vertices.filter(x => x._2.equalsIgnoreCase(name))
     val authorGraph = Graph(vertexRDD, edgeRDD)
+
     val componentsRDD = authorGraph.connectedComponents()
       .vertices.groupBy(_._2).map(
       line => {
@@ -241,7 +244,7 @@ object AnalysisTool {
   def analyzeByName(graph: Graph[String, Double], name: String): Array[String] = {
     val componentsRDD = getComponentsRDD(graph, name.replace("_", " "))
     //val data1 = getPairsByAuthorName(componentsRDD)
-    val data1 = getPairsByEdges(graph, name.replace("_", " "))
+    val data1 = getExpPairs(graph, name.replace("_", " "))
     //读取实验值
     //    val data1 = readPairsFromFile(name, "exp")
     //读取真实值
@@ -267,7 +270,16 @@ object AnalysisTool {
     record
   }
 
-  def get2JumpPair(graph: Graph[String, Double]): Unit = {
+  def getExpPairs(graph: Graph[String, Double], name: String): Set[(Long, Long)] = {
+    val edges = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
+      .map(x => Edge(x.srcId, x.dstId, x.attr))
+    val subGraph = Graph.fromEdges(edges, name)
+    //    val authorGraph = Graph.fromEdges(edges, String)
+    val result = get2JumpPair(subGraph) ++ get1JumpPair(subGraph)
+    result
+  }
+
+  def get2JumpPair(graph: Graph[String, Double]): Set[(Long, Long)] = {
     type VMap = Map[VertexId, Int] //定义每个节点存放的数据类型，为若干个（节点编号，一个整数）构成的map，当然发送的消息也得遵守这个类型
     /**
       * 节点数据的更新 就是集合的union
@@ -314,7 +326,7 @@ object AnalysisTool {
 
     //    twoJumpFirends.filter(x => x._2 != Set()).foreach(println(_)) //把二跳邻居集合非空的（点，{二跳邻居集合}）打印出来
     val result = twoJumpFirends.filter(x => x._2 != Set()).map(x => x._2.map(y => (x._1, y))).reduce(_ ++ _).toSet
-    result.foreach(println(_))
+    result
   }
 
   def main(args: Array[String]): Unit = {
