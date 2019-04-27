@@ -114,7 +114,8 @@ object Similarity {
   def computeLayerSim(layer1: Int, layer2: Int): Double = {
     val delta = (layer1 - layer2).abs.toDouble
     //e^（-|layer1-layer2|/10)
-    Math.exp(-delta / 10.0)
+    //Math.exp(-delta / 10.0)
+    1.0
   }
 
   /**

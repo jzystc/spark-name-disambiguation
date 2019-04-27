@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import main.AuthorNetwork
 import main.AuthorNetwork.{buildML, save}
-import org.apache.spark.graphx.{Edge, EdgeDirection, EdgeTriplet, Graph, PartitionID, VertexId}
+import org.apache.spark.graphx._
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession

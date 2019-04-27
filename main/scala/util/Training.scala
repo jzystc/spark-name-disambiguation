@@ -24,7 +24,7 @@ object Training {
     val row = graph.triplets.filter(_.attr._1 != 2).map(x =>
       //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
       (x.attr._1, new SparseVector(size = 4, indices = Array(0, 1, 2, 3),
-        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4), Math.max(0, x.attr._5))).toSparse, x.srcAttr._1)
+        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4))).toSparse, x.srcAttr._1)
     )
     import ss.implicits._
     val df = row.toDF("label", "features", "name")
@@ -42,8 +42,8 @@ object Training {
   def getData(ss: SparkSession, graph: Graph[VertexAttr, EdgeML]): DataFrame = {
     val row = graph.edges.filter(_.attr._1 != 2).map(x =>
       //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
-      (x.attr._1, new SparseVector(size = 4, indices = Array(0, 1, 2, 3),
-        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4), Math.max(0, x.attr._5))).toSparse)
+      (x.attr._1, new SparseVector(size = 3, indices = Array(0, 1, 2),
+        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4))).toSparse)
     )
     import ss.implicits._
     val df = row.toDF("label", "features")
@@ -83,10 +83,12 @@ object Training {
       val label = x.attr._1
       val orgSim = x.attr._2
       val coauthorSim = x.attr._3
-      val titleSim = x.attr._4
-      val abstractSim = x.attr._5
+      val textSim=x.attr._4
+//      val titleSim = x.attr._4
+//      val abstractSim = x.attr._5
 
-      val line = s"$label 1:$orgSim 2:$coauthorSim 3:$titleSim 4:$abstractSim \n"
+     // val line = s"$label 1:$orgSim 2:$coauthorSim 3:$titleSim 4:$abstractSim \n"
+      val line = s"$label 1:$orgSim 2:$coauthorSim 3:$textSim\n"
       line
     }
 

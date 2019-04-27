@@ -29,7 +29,7 @@ object NameDisambiguation {
     DataPreparation.prepareML(ss, name, path, model)
   }
 
-  def train(ss: SparkSession, modelName: String, maxIter: Int) {
+  def train(ss: SparkSession, modelName: String, maxIter: Int=10) {
 
     val network = buildML(ss, path + name)
     val networkAfter = AuthorNetwork.runForTraining(network, numPartition)
@@ -55,7 +55,7 @@ object NameDisambiguation {
   }
 
   def disambiguate(ss: SparkSession, modelName: String = "lr", csvPath: String = "/root/100.csv"): Unit = {
-    println(s"csvPath: $csvPath")
+
     //生成初始网络
     modelName match {
       case "lsvc" =>
@@ -103,61 +103,69 @@ object NameDisambiguation {
     val ss: SparkSession = SparkSession.builder()
       .appName(this.getClass.getName)
       //若在本地运行需要设置为local
-      //.master("local[*]")
+      .master("local[*]")
       .getOrCreate()
-
-    if (args.contains("-n")) {
-      name = args(args.indexOf("-n") + 1)
-      println(s"name: $name")
-    } else {
-      println("please specify name. eg: -n test")
-      ss.stop()
-    }
-    if (args.contains("-P")) {
-      path = args(args.indexOf("-P") + 1)
-      println(s"path: $path")
-    }
-    if (args.contains("-nP")) {
-      numPartition = args(args.indexOf("-nP") + 1).toInt
-      println(s"numPartition: $numPartition")
-    }
-    var modelName = "lr"
-    var maxIter = 10
-    if (args.contains("-M")) {
-      modelName = args(args.indexOf("-M") + 1)
-      println(s"modelName: $modelName")
-      if (args.contains("-i")) {
-        maxIter = args(args.indexOf("-i") + 1).toInt
-      }
-      println(s"maxIter: $maxIter")
-    }
-    var vecSize = 100
-    if (args.contains("-v")) {
-      vecSize = args(args.indexOf("-v") + 1).toInt
-      println(s"vecSIze: $vecSize")
-    }
-    if (args.contains("-m")) {
-      val mode = args(args.indexOf("-m") + 1)
-      if (mode.contains("p")) {
-        prepare(ss, vecSize)
-      }
-      if (mode.contains("t")) {
-        train(ss, modelName, maxIter)
-      }
-      if (mode.contains("d")) {
-        if (args.contains("-csv")) {
-          val csvPath = args(args.indexOf("-csv") + 1)
-          disambiguate(ss, modelName, csvPath)
-        } else {
-          disambiguate(ss, modelName)
-        }
+    if (!args.isEmpty) {
+      if (args.contains("-n")) {
+        name = args(args.indexOf("-n") + 1)
+        println(s"name: $name")
       } else {
-        println("wrong params for running mode.")
+        println("please specify name. eg: -n test")
         ss.stop()
       }
-    } else {
-      println("please specify running mode. eg: -m ptd")
-      ss.stop()
+      if (args.contains("-P")) {
+        path = args(args.indexOf("-P") + 1)
+        println(s"path: $path")
+      }
+      if (args.contains("-nP")) {
+        numPartition = args(args.indexOf("-nP") + 1).toInt
+        println(s"numPartition: $numPartition")
+      }
+      var modelName = "lr"
+      var maxIter = 10
+      if (args.contains("-M")) {
+        modelName = args(args.indexOf("-M") + 1)
+        println(s"modelName: $modelName")
+        if (args.contains("-i")) {
+          maxIter = args(args.indexOf("-i") + 1).toInt
+        }
+        println(s"maxIter: $maxIter")
+      }
+      var vecSize = 100
+      if (args.contains("-v")) {
+        vecSize = args(args.indexOf("-v") + 1).toInt
+        println(s"vecSIze: $vecSize")
+      }
+      if (args.contains("-m")) {
+        val mode = args(args.indexOf("-m") + 1)
+        if (mode.contains("p")) {
+          prepare(ss, vecSize)
+        }
+        if (mode.contains("t")) {
+          train(ss, modelName, maxIter)
+        }
+        if (mode.contains("d")) {
+          if (args.contains("-csv")) {
+            val csvPath = args(args.indexOf("-csv") + 1)
+            println(s"csvPath: $csvPath")
+            disambiguate(ss, modelName, csvPath)
+          } else {
+            disambiguate(ss, modelName)
+          }
+        } else {
+          println("wrong params for running mode.")
+          ss.stop()
+        }
+      } else {
+        println("please specify running mode. eg: -m ptd")
+        ss.stop()
+      }
+    }else{
+      name="c_y_huang"
+      path="d:/namedis/"
+      prepare(ss,50)
+      train(ss,"lr",10)
+      disambiguate(ss,"lr")
     }
     ss.stop()
   }

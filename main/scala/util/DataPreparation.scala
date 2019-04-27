@@ -147,9 +147,9 @@ object DataPreparation {
       .drop("paper_id")
     val lAuthorsDF = authorsDF.withColumnRenamed("id", "srcId")
     //change column name
-    //    authorsDF.createOrReplaceTempView("authortemp")
+
     val rAuthorsDF = authorsDF.withColumnRenamed("id", "dstId")
-    //    val edgeDF = ss.sql("select authortemp.id,authortemp.id from authortemp where authortemp.paper_id = authortemp.paper_id and authortemp.id != authortemp.id" ).show(10)
+
     //构建link边dataframe
     var linkDF = lAuthorsDF.join(rAuthorsDF,
       //条件1 作者名相同
@@ -172,21 +172,21 @@ object DataPreparation {
     var edgeDF = coauthorDF.union(linkDF)
     edgeDF = edgeDF.withColumn("orgSim", edgeDF("label") * 0.0)
     edgeDF = edgeDF.withColumn("coauthorSim", edgeDF("label") * 0.0)
-    edgeDF = edgeDF.withColumn("titleSim", edgeDF("label") * 0.0)
-    edgeDF = edgeDF.withColumn("abstractSim", edgeDF("label") * 0.0)
+    edgeDF = edgeDF.withColumn("textSim", edgeDF("label") * 0.0)
+    //    edgeDF = edgeDF.withColumn("titleSim", edgeDF("label") * 0.0)
+    //    edgeDF = edgeDF.withColumn("abstractSim", edgeDF("label") * 0.0)
 
     //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
     //    vertexDF = Training.fitTfIdf(vertexDF, "title", "titleVec")
     //TODO:合并abstract和title
-
-    /*import org.apache.spark.sql.functions._
-       vertexDF.na.fill("",Array("abstract","title"))
-       vertexDF = vertexDF.select(concat_ws(",", vertexDF("title"),vertexDF("abstrct")).cast(StringType).as("text"))
-       vertexDF = GlobalTraining.trans(vertexDF, "text", "textVec", model)
-     */
+    import org.apache.spark.sql.functions._
+    vertexDF.na.fill("", Array("abstract", "title"))
+    vertexDF = vertexDF.select(vertexDF("id"), vertexDF("name"), vertexDF("org"), vertexDF("year"),vertexDF("author_id"), concat_ws(",", vertexDF("title"), vertexDF("abstract")).cast(StringType).as("text"))
     vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
-    vertexDF = GlobalTraining.trans(vertexDF, "abstract", "abstractVec", model)
-    vertexDF = GlobalTraining.trans(vertexDF, "title", "titleVec", model)
+    vertexDF = GlobalTraining.trans(vertexDF, "text", "textVec", model)
+    //    vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
+    //    vertexDF = GlobalTraining.trans(vertexDF, "abstract", "abstractVec", model)
+    //    vertexDF = GlobalTraining.trans(vertexDF, "title", "titleVec", model)
     //保存节点和边dataframe为parquet文件到磁盘上
     //vertex dataframe 导出路径
     val vp = path + name + "/ml_input_v"
@@ -269,16 +269,9 @@ object DataPreparation {
     val ss: SparkSession = SparkSession.builder()
       .appName(this.getClass.getName)
       //若在本地运行需要设置为local
-      .master("local[20]")
+      .master("local[*]")
       .getOrCreate()
 
-    //数据库表名
-    val name = "xu_xu"
-    val path = "d:/"
-
-    //prepareMLByName(ss, name, path)
-    //prepareByName(ss, name, path)
-    //prepare(ss, path)
     ss.close()
   }
 }
