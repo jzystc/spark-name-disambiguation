@@ -2,7 +2,8 @@ package main
 
 import java.io.File
 
-import main.AuthorNetwork.{buildML, save}
+import main.AuthorNetwork.{Label, Name, buildML, save}
+import org.apache.spark.graphx.VertexId
 import org.apache.spark.ml.classification._
 import org.apache.spark.sql.SparkSession
 import util._
@@ -29,7 +30,7 @@ object NameDisambiguation {
     DataPreparation.prepareML(ss, name, path, model)
   }
 
-  def train(ss: SparkSession, modelName: String, maxIter: Int=10) {
+  def train(ss: SparkSession, modelName: String = "lr", maxIter: Int = 10) {
 
     val network = buildML(ss, path + name)
     val networkAfter = AuthorNetwork.runForTraining(network, numPartition)
@@ -81,14 +82,17 @@ object NameDisambiguation {
     def all(): Unit = {
       val file = Source.fromURL(this.getClass.getResource("/resources/100.txt"))
       val names = file.getLines().toArray
-      val records = AnalysisTool.analyze(graph, names)
+      val pairs = ss.sparkContext.objectFile[(VertexId, VertexId, Label, Name)](s"$path/truepairs")
+      pairs.cache()
+      val records = AnalysisTool.analyze(graph, names, pairs)
       val csv = new File(csvPath)
       csv.createNewFile()
       CSVUtil.write(csvPath, records = records)
     }
 
     def one(): Unit = {
-      AnalysisTool.analyzeByName(graph, name)
+      val pairs = ss.sparkContext.objectFile[(VertexId, VertexId, Label, Name)](s"$path/truepairs")
+      AnalysisTool.analyzeByName(graph, name, pairs)
     }
 
     if (name.equals("all") || name.equals("test")) {
@@ -103,7 +107,7 @@ object NameDisambiguation {
     val ss: SparkSession = SparkSession.builder()
       .appName(this.getClass.getName)
       //若在本地运行需要设置为local
-      .master("local[*]")
+      //.master("local[*]")
       .getOrCreate()
     if (!args.isEmpty) {
       if (args.contains("-n")) {
@@ -128,8 +132,8 @@ object NameDisambiguation {
         println(s"modelName: $modelName")
         if (args.contains("-i")) {
           maxIter = args(args.indexOf("-i") + 1).toInt
+          println(s"maxIter: $maxIter")
         }
-        println(s"maxIter: $maxIter")
       }
       var vecSize = 100
       if (args.contains("-v")) {
@@ -152,20 +156,17 @@ object NameDisambiguation {
           } else {
             disambiguate(ss, modelName)
           }
-        } else {
-          println("wrong params for running mode.")
-          ss.stop()
         }
       } else {
         println("please specify running mode. eg: -m ptd")
         ss.stop()
       }
-    }else{
-      name="c_y_huang"
-      path="d:/namedis/"
-      prepare(ss,50)
-      train(ss,"lr",10)
-      disambiguate(ss,"lr")
+    } else {
+      name = "k_yang"
+      path = "d:/namedis/"
+      //prepare(ss, 200)
+      //train(ss, "lr", 10)
+      disambiguate(ss, "lr")
     }
     ss.stop()
   }

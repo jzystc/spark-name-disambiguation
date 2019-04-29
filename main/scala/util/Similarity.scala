@@ -11,12 +11,6 @@ object Similarity {
   /*定义一个全局JaroWinkle对象用于计算机构名字符串相似度*/
   final val jaroWinkler = new JaroWinkler()
 
-  /*最大文本相似分数*/
-  var maxTextSim = 0.0
-
-  /*最小文本相似分数*/
-  var minTextSim = 1.0
-
   def main(args: Array[String]): Unit = {
     val jaroWinkler = new JaroWinkler()
     val levenshtein = new Levenshtein()
@@ -33,16 +27,6 @@ object Similarity {
     println("levenshtein normalized", 1 - levenDist2)
 
   }
-
-  /**
-    * 缩放link边的文本相似度分数到[0,1]区间
-    *
-    */
-  def rescaleTextSim(textSim: Double): Double = {
-    val scaledTextSim: Double = (textSim - minTextSim) / (maxTextSim - minTextSim)
-    scaledTextSim
-  }
-
 
   /**
     * 判断相似度分数是否大于阈值，大于则返回1，否则返回原值
@@ -111,11 +95,11 @@ object Similarity {
     * @param layer2 paper2的出版年份
     * @return 文章出版年份差值对文章相似分数的缩放系数
     */
-  def computeLayerSim(layer1: Int, layer2: Int): Double = {
+  def computeYearSim(layer1: Int, layer2: Int): Double = {
     val delta = (layer1 - layer2).abs.toDouble
     //e^（-|layer1-layer2|/10)
-    //Math.exp(-delta / 10.0)
-    1.0
+    Math.exp(-delta / 10.0)
+    //1.0
   }
 
   /**

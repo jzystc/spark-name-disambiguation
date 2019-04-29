@@ -2,7 +2,7 @@ package main
 
 import java.io.File
 
-import org.apache.spark.graphx.{Edge, Graph}
+import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.ml.classification.ClassificationModel
 import org.apache.spark.ml.linalg.{DenseVector, Vector}
 import org.apache.spark.sql.SparkSession
@@ -16,7 +16,7 @@ object AuthorNetwork {
     * 2 dstId
     * 3 sim score
     */
-  type LinkMsg = (Long, Long, Double)
+  type LinkMsg = (VertexId, VertexId, OrgSim)
 
   /**
     * 定义边属性的数据类型
@@ -35,9 +35,14 @@ object AuthorNetwork {
     * 5.摘要相似度
     **/
 
-  //type EdgeML = (Double, Double, Double, Double, Double)
+  type YearSim = Double
+  type Label = Double
+  type OrgSim = Double
+  type TextSim = Double
+  type CoauthorSim = Double
+  type EdgeML = (Label, OrgSim, CoauthorSim, TextSim, YearSim)
   //TODO: 合并title和abstract
-  type EdgeML = (Double, Double, Double, Double)
+  //type EdgeML = (Double, Double, Double, Double)
   /**
     * 定义节点属性的数据类型
     * 1.名字
@@ -48,7 +53,13 @@ object AuthorNetwork {
     * 6.摘要向量
     */
   //TODO: 添加paper_id
-  type VertexAttr = (String, String, Vector, Int, Vector)
+  type Name = String
+  type AuthorId = String
+  type OrgVec = Vector
+  type PaperId = String
+  type Year = Int
+  type TextVec = Vector
+  type VertexAttr = (Name, AuthorId, OrgVec, PaperId, Year, TextVec)
 
   //type VertexAttr = (String, String, Vector, String, Int, Vector)
   def buildML(ss: SparkSession, path: String): Graph[VertexAttr, EdgeML] = {
@@ -61,9 +72,9 @@ object AuthorNetwork {
     edgeDF.createOrReplaceTempView("edge")
     //从临时视图中获取数据
     //val vertexSQL = ss.sql("select id,name,author_id,orgVec,year,titleVec,abstractVec from vertex")
-    val vertexSQL = ss.sql("select id,name,author_id,orgVec,year,textVec from vertex")
+    val vertexSQL = ss.sql("select id,name,author_id,orgVec,paper_id,year,textVec from vertex")
     //    val edgeSQL = ss.sql("select srcId,dstId,label,orgSim,coauthorSim,titleSim,abstractSim from edge")
-    val edgeSQL = ss.sql("select srcId,dstId,label,orgSim,coauthorSim,textSim from edge")
+    val edgeSQL = ss.sql("select srcId,dstId,label,orgSim,coauthorSim,textSim,yearSim from edge")
     //构建节点RDD
     val vertexRDD = vertexSQL.rdd.map(x =>
       (
@@ -91,10 +102,12 @@ object AuthorNetwork {
           //          },
 
           x(3).asInstanceOf[Vector],
+          //paper_id
+          x(4).asInstanceOf[String],
           //发表年份
-          x(4).asInstanceOf[Int],
+          x(5).asInstanceOf[Int],
           //标题向量
-          x(5).asInstanceOf[Vector]
+          x(6).asInstanceOf[Vector]
           //摘要向量
           // x(6).asInstanceOf[Vector]
         )
@@ -121,10 +134,10 @@ object AuthorNetwork {
           x(3).asInstanceOf[Double],
           //coauthorSim
           x(4).asInstanceOf[Double],
-          //titleSim
-          x(5).asInstanceOf[Double]
-          //abstractSim
-          // x(6).asInstanceOf[Double]
+          //textSim
+          x(5).asInstanceOf[Double],
+          //yearSim
+          x(6).asInstanceOf[Double]
         )
       )
     )
@@ -376,21 +389,21 @@ object AuthorNetwork {
         //author_id相同且不等于0(0表示缺省)则返回1(1表示合并节点),否则返回文本相似度
         //        val orgSim = computeOrgSim(triplet.srcAttr._3, triplet.dstAttr._3)
         val orgSim = computeVectorSim(triplet.srcAttr._3, triplet.dstAttr._3)
-        val layerSim = computeLayerSim(triplet.srcAttr._4, triplet.dstAttr._4)
-        val textSim = computeVectorSim(triplet.srcAttr._5, triplet.dstAttr._5)
+        val yearSim = computeYearSim(triplet.srcAttr._5, triplet.dstAttr._5)
+        val textSim = computeVectorSim(triplet.srcAttr._6, triplet.dstAttr._6)
         //        val titleSim = computeVectorSim(triplet.srcAttr._5, triplet.dstAttr._5)
         //        val abstractSim = computeVectorSim(triplet.srcAttr._6, triplet.dstAttr._6)
 
         if (triplet.srcAttr._2.equals(triplet.dstAttr._2)) {
           //          (1.0, layerSim * orgSim, 0.0, layerSim * titleSim, layerSim * abstractSim)
-          (1.0, layerSim * orgSim, 0.0, layerSim * textSim)
+          (1.0, orgSim, 0.0, textSim, yearSim)
         } else {
           //          (0.0, layerSim * orgSim, 0.0, layerSim * titleSim, layerSim * abstractSim)
-          (0.0, layerSim * orgSim, 0.0, layerSim * textSim)
+          (0.0, orgSim, 0.0, textSim, yearSim)
         }
       } else
       //        (2.0, 0.0, 0.0, 0.0, 0.0)
-        (2.0, 0.0, 0.0, 0.0)
+        triplet.attr
     })
 
     println("[2] 将每个节点与其他同名节点的机构相似分数添加到节点中")
@@ -427,7 +440,7 @@ object AuthorNetwork {
       //        .partitionBy(new HashPartitioner(partitionNum))
       //        .repartition(partitionNum)
       .leftOuterJoin(msgRDD)
-      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, getSetFromOption(x._2._2))))
+      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, x._2._1._6, getSetFromOption(x._2._2))))
 
     var graphWithMsg = Graph(vertexRDD, graph.edges)
     //  graph.vertices.foreach(println(_))
@@ -437,8 +450,8 @@ object AuthorNetwork {
         //2表示合作者关系
         if (triplet.attr._1 == 2.0) {
           //author_id相同，边的属性设为1
-          triplet.sendToDst(triplet.srcAttr._6)
-          triplet.sendToSrc(triplet.dstAttr._6)
+          triplet.sendToDst(triplet.srcAttr._7)
+          triplet.sendToSrc(triplet.dstAttr._7)
         }
       },
       {
@@ -449,19 +462,19 @@ object AuthorNetwork {
       //        .partitionBy(new HashPartitioner(partitionNum))
       //        .repartition(partitionNum)
       .leftOuterJoin(msgRDD)
-      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, getSetFromOption(x._2._2))))
+      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, x._2._1._6, getSetFromOption(x._2._2))))
 
     graphWithMsg = Graph(vertexRDD, graph.edges)
     println("[4] 计算合作者增益")
     //计算合作者增益并更新link分数
     graphWithMsg = graphWithMsg.mapTriplets(triplet => {
       //忽略合作者关系边和分数为1的link边，边的属性为2时表示合作者关系 只对link边计算
-      if (triplet.attr._1 != 2) {
-        val coSim = computeCoauthorSim(triplet.srcAttr._6, triplet.dstAttr._6)
+      if (triplet.attr._1 != 2.0) {
+        val coSim = computeCoauthorSim(triplet.srcAttr._7, triplet.dstAttr._7)
         //val coSim=0.0
         // TODO: 合并title和abstract
-        //        (triplet.attr._1, triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5)
-        (triplet.attr._1, triplet.attr._2, coSim, triplet.attr._4)
+        (triplet.attr._1, triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5)
+        //(triplet.attr._1, triplet.attr._2, coSim, triplet.attr._4)
       } else
         triplet.attr
     })
@@ -630,19 +643,19 @@ object AuthorNetwork {
         //        }
 
         val orgSim = computeVectorSim(triplet.srcAttr._3, triplet.dstAttr._3)
-        val layerSim = computeLayerSim(triplet.srcAttr._4, triplet.dstAttr._4)
-        val textSim = computeVectorSim(triplet.srcAttr._5, triplet.dstAttr._5)
+        val yearSim = computeYearSim(triplet.srcAttr._5, triplet.dstAttr._5)
+        val textSim = computeVectorSim(triplet.srcAttr._6, triplet.dstAttr._6)
         //        val titleSim = computeVectorSim(triplet.srcAttr._5, triplet.dstAttr._5)
         //        val abstractSim = computeVectorSim(triplet.srcAttr._6, triplet.dstAttr._6)
 
         //val sim = layerSim * (Weight.wTitle * titleSim + Weight.wOrg * orgSim + Weight.wAbstract * abstractSim)
         // var sim = Weight.alpha * ((1 - Weight.beta) * textSim + Weight.beta * orgSim)
         // (0.0, orgSim * layerSim, 0.0, titleSim * layerSim, abstractSim * layerSim)
-        (0.0, orgSim * layerSim, 0.0, textSim * layerSim)
+        (0.0, orgSim, 0.0, textSim, yearSim)
 
       } else
-      //        (2.0, 0.0, 0.0, 0.0, 0.0)
-        (2.0, 0.0, 0.0, 0.0)
+        triplet.attr
+      //(2.0, 0.0, 0.0, 0.0)
 
     })
 
@@ -681,8 +694,8 @@ object AuthorNetwork {
       //        .repartition(partitionNum)
       .leftOuterJoin(msgRDD)
       //TODO:合并
-      //      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, x._2._1._6, getSetFromOption(x._2._2))))
-      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, getSetFromOption(x._2._2))))
+      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, x._2._1._6, getSetFromOption(x._2._2))))
+    // .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, getSetFromOption(x._2._2))))
 
     var graphWithMsg = Graph(vertexRDD, graph.edges)
     //  graph.vertices.foreach(println(_))
@@ -692,8 +705,8 @@ object AuthorNetwork {
         //2表示合作者关系
         if (triplet.attr._1 == 2.0) {
           //author_id相同，边的属性设为1
-          triplet.sendToDst(triplet.srcAttr._6)
-          triplet.sendToSrc(triplet.dstAttr._6)
+          triplet.sendToDst(triplet.srcAttr._7)
+          triplet.sendToSrc(triplet.dstAttr._7)
         }
       },
       {
@@ -704,7 +717,7 @@ object AuthorNetwork {
       //        .partitionBy(new HashPartitioner(partitionNum))
       //        .repartition(partitionNum)
       .leftOuterJoin(msgRDD)
-      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, getSetFromOption(x._2._2))))
+      .map(x => (x._1, (x._2._1._1, x._2._1._2, x._2._1._3, x._2._1._4, x._2._1._5, x._2._1._6, getSetFromOption(x._2._2))))
 
     graphWithMsg = Graph(vertexRDD, graph.edges)
     println("[3] 计算合作者增益")
@@ -712,16 +725,14 @@ object AuthorNetwork {
     graphWithMsg = graphWithMsg.mapTriplets(triplet => {
       //忽略合作者关系边和分数为1的link边，边的属性为2时表示合作者关系 只对link边计算
       if (triplet.attr._1 != 2.0) {
-        val coSim = computeCoauthorSim(triplet.srcAttr._6, triplet.dstAttr._6)
+        val coSim = computeCoauthorSim(triplet.srcAttr._7, triplet.dstAttr._7)
         //使用layer信息作为系数
-        //        val features = new DenseVector(Array(triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5))
-        val features = new DenseVector(Array(triplet.attr._2, coSim, triplet.attr._4))
-        //        val result = model.transform(ss.parralle())
-        //        val result = 1.0
+        val features = new DenseVector(Array(triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5))
+        //val features = new DenseVector(Array(triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5))
         val result = model.predict(features)
         //println(result)
         //        (result, triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5)
-        (result, triplet.attr._2, coSim, triplet.attr._4)
+        (result, triplet.attr._2, coSim, triplet.attr._4, triplet.attr._5)
       } else
         triplet.attr
     })
@@ -738,14 +749,14 @@ object AuthorNetwork {
     * @param path  保存路径
     */
   def save(graph: Graph[VertexAttr, EdgeML], path: String): Unit = {
-    def deleteDirectory(filePath:String):Unit={
+    def deleteDirectory(filePath: String): Unit = {
       val file = new File(filePath)
-      if(!file.exists()){
+      if (!file.exists()) {
         return
       }
-      if(file.isFile){
+      if (file.isFile) {
         file.delete()
-      }else if(file.isDirectory){
+      } else if (file.isDirectory) {
         val files = file.listFiles()
         for (myfile <- files) {
           deleteDirectory(filePath + "/" + myfile.getName)
@@ -753,6 +764,7 @@ object AuthorNetwork {
         file.delete()
       }
     }
+
     val vOut = path + "/out_v"
     val eOut = path + "/out_e"
     deleteDirectory(vOut)

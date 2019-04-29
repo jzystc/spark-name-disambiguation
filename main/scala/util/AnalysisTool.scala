@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import main.AuthorNetwork
-import main.AuthorNetwork.{buildML, save}
+import main.AuthorNetwork.{Label, Name, buildML, save}
 import org.apache.spark.graphx._
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.rdd.RDD
@@ -17,7 +17,6 @@ import scala.io.Source
 
 object AnalysisTool {
 
-  private val executor = Executors.newCachedThreadPool
 
   /**
     * 从指定的路径读取节点rdd文件和边rdd文件构建图
@@ -45,18 +44,10 @@ object AnalysisTool {
     * 从图中获得某个名字对应的所有联通块节点id的RDD
     *
     * @param graph 作者网络
-    * @param name  作者名字
     *
     */
-  def getComponentsRDD(graph: Graph[String, Double], name: String): RDD[Array[Long]] = {
-
-
-    val edgeRDD = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
-      .map(x => Edge(x.srcId, x.dstId, x.attr))
-    val vertexRDD = graph.vertices.filter(x => x._2.equalsIgnoreCase(name))
-    val authorGraph = Graph(vertexRDD, edgeRDD)
-
-    val componentsRDD = authorGraph.connectedComponents()
+  def getComponentsRDD(graph: Graph[String, Double]): RDD[Array[Long]] = {
+    val componentsRDD = graph.connectedComponents()
       .vertices.groupBy(_._2).map(
       line => {
         line._2.map(x => x._1).toArray.sorted
@@ -66,7 +57,7 @@ object AnalysisTool {
   }
 
   def getResultByName(graph: Graph[String, Double], name: String): ObjectNode = {
-    val componentsRDD = getComponentsRDD(graph, name)
+    val componentsRDD = getComponentsRDD(graph)
     val map = mutable.HashMap[String, Array[Byte]]()
     val mapper = new ObjectMapper()
     //构建 ObjectNode
@@ -108,11 +99,11 @@ object AnalysisTool {
     pairs.map(x => x.toString())
   }
 
-  def analyze(graph: Graph[String, Double], names: Array[String]): List[Array[String]] = {
+  def analyze(graph: Graph[String, Double], names: Array[String],pairs:RDD[(VertexId,VertexId,Label,Name)]): List[Array[String]] = {
     var records = List[Array[String]]()
     for (name <- names) {
       println(name)
-      records = records :+ analyzeByName(graph, name)
+      records = records :+ analyzeByName(graph, name,pairs)
       /*executor.execute(new Runnable() {
         final val n = name
         final val g = graph
@@ -168,46 +159,46 @@ object AnalysisTool {
     fscore
   }
 
-  /**
-    * 写入实验得到的pairs到文件中
-    *
-    * @param pairs 实验得到的pairs
-    * @param name  作者名字
-    */
-  def writePairsToFile(pairs: Set[(Long, Long)], name: String): Unit = {
-    val filename = name +
-      "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
-    val writer = new PrintWriter(new File(System.getProperty("user.dir") + "/src/main/resources/exp/" + filename))
-    //val writer = new PrintWriter(new File(outdirectory + filename))
-    for (x <- pairs) {
-      writer.write(x + "\n")
-    }
-    writer.close()
-  }
+//  /**
+//    * 写入实验得到的pairs到文件中
+//    *
+//    * @param pairs 实验得到的pairs
+//    * @param name  作者名字
+//    */
+//  def writePairsToFile(pairs: Set[(Long, Long)], name: String): Unit = {
+//    val filename = name +
+//      "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
+//    val writer = new PrintWriter(new File(System.getProperty("user.dir") + "/src/main/resources/exp/" + filename))
+//    //val writer = new PrintWriter(new File(outdirectory + filename))
+//    for (x <- pairs) {
+//      writer.write(x + "\n")
+//    }
+//    writer.close()
+//  }
 
-  /**
-    * 读取文件中的pairs
-    *
-    * @param name 作者名字
-    * @param kind 文件类型 true表示读取真实值 exp表示读取实验值
-    * @return
-    */
-  def readPairsFromFile(name: String, kind: String): Set[String] = {
-    var filename = ""
-    if (kind.equals("exp")) {
-      filename = name.replace(' ', '_') +
-        "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
-    } else if (kind.equals("true")) {
-      filename = name.replace(' ', '_') + ".txt"
-    }
-    val file = Source.fromURL(this.getClass.getClassLoader.getResource("resources/" + kind + "/" + filename))
-    //    val file = Source.fromFile(System.getProperty("user.dir") + "/src/main/resources/" + kind + "/" + filename)
-    var data = Set[String]()
-    for (line <- file.getLines()) {
-      data += line.toString
-    }
-    data
-  }
+//  /**
+//    * 读取文件中的pairs
+//    *
+//    * @param name 作者名字
+//    * @param kind 文件类型 true表示读取真实值 exp表示读取实验值
+//    * @return
+//    */
+//  def readPairsFromFile(name: String, kind: String): Set[String] = {
+//    var filename = ""
+//    if (kind.equals("exp")) {
+//      filename = name.replace(' ', '_') +
+//        "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
+//    } else if (kind.equals("true")) {
+//      filename = name.replace(' ', '_') + ".txt"
+//    }
+//    val file = Source.fromURL(this.getClass.getClassLoader.getResource("resources/" + kind + "/" + filename))
+//    //    val file = Source.fromFile(System.getProperty("user.dir") + "/src/main/resources/" + kind + "/" + filename)
+//    var data = Set[String]()
+//    for (line <- file.getLines()) {
+//      data += line.toString
+//    }
+//    data
+//  }
 
   /**
     * 读取真实pairwise
@@ -241,10 +232,14 @@ object AnalysisTool {
     * @param name 名字
     *
     */
-  def analyzeByName(graph: Graph[String, Double], name: String): Array[String] = {
-    val componentsRDD = getComponentsRDD(graph, name.replace("_", " "))
+  def analyzeByName(graph: Graph[String, Double], name: String,pairs:RDD[(VertexId,VertexId,Label,Name)]): Array[String] = {
+    val subGraph = graph.subgraph(epred = t => t.attr == 1.0,
+      vpred = (id, str) => str.equalsIgnoreCase(name.replace("_", " ")))
+    subGraph.vertices.take(3)
+    subGraph.edges.take(3)
+    val componentsRDD = getComponentsRDD(subGraph)
     //val data1 = getPairsByAuthorName(componentsRDD)
-    val data1 = getExpPairs(graph, name.replace("_", " "))
+    val data1 = getExpPairs(subGraph)
     //读取实验值
     //    val data1 = readPairsFromFile(name, "exp")
     //读取真实值
@@ -262,21 +257,32 @@ object AnalysisTool {
     val recall = computeRecall(tp, fn)
     val fscore = computeFscore(precision, recall)
     println("name:" + name)
+    val expNum = componentsRDD.count.toString
+    println(s"exp num:" + expNum)
     println("precision:" + precision)
     println("recall:" + recall)
     println("f1:" + fscore)
     //val record = Array[String](name, AuthorDao.getAuthorsNumByName(name).toString, componentsRDD.count.toString, precision.toString, recall.toString, fscore.toString)
-    val record = Array[String](name, componentsRDD.count.toString, precision.toString, recall.toString, fscore.toString)
+    val record = Array[String](name, expNum, precision.toString, recall.toString, fscore.toString)
     record
   }
 
-  def getExpPairs(graph: Graph[String, Double], name: String): Set[(Long, Long)] = {
-    val edges = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
-      .map(x => Edge(x.srcId, x.dstId, x.attr))
-    val subGraph = Graph.fromEdges(edges, name)
+  def getExpPairs(graph: Graph[String, Double]): Set[(Long, Long)] = {
+
+    //    val edges = graph.triplets.filter(x => x.attr == 1.0 && x.srcAttr.equalsIgnoreCase(name))
+    //      .map(x => Edge(x.srcId, x.dstId, x.attr))
+    //    val subGraph = Graph.fromEdges(edges, name)
     //    val authorGraph = Graph.fromEdges(edges, String)
-    val result = get2JumpPair(subGraph) ++ get1JumpPair(subGraph)
-    result
+    try {
+      val result = get2JumpPair(graph) ++ get1JumpPair(graph)
+      result
+    }
+    catch {
+      case ex: java.lang.UnsupportedOperationException =>
+        println("ex: java.lang.UnsupportedOperationException")
+        val result = get1JumpPair(graph)
+        result
+    }
   }
 
   def get2JumpPair(graph: Graph[String, Double]): Set[(Long, Long)] = {
@@ -334,35 +340,8 @@ object AnalysisTool {
     val ss = SparkSession.builder()
       .appName(this.getClass.getName)
       .master("local[*]")
-      .config("spark.local.dir", "/tmp/sparktmp,/var/tmp/sparktmp")
+      //.config("spark.local.dir", "/tmp/sparktmp,/var/tmp/sparktmp")
       .getOrCreate()
-
-    val name = "test"
-    //val file = Source.fromURL(this.getClass.getClassLoader.getResource("true/xu_xu.txt"))
-    val path = "/home/csubigdata/namedis/"
-    //val graph = loadGraph(ss, path + name)
-
-    def disambiguate(): Unit = {
-      //生成初始网络
-      val network = buildML(ss, path + name)
-      val lrModel = LogisticRegressionModel.load("/home/csubigdata/namedis/lr")
-      //val mpcModel = MultilayerPerceptronClassificationModel.load("/home/csubigdata/namedis/mpc")
-      val networkAfter = AuthorNetwork.runML(network, 400, lrModel)
-      save(networkAfter, path + name)
-      val graph = AnalysisTool.loadGraph(ss, path + name)
-      val file = Source.fromURI(this.getClass.getResource("100.txt").toURI)
-      val names = file.getLines().toArray
-      val records = AnalysisTool.analyze(graph, names)
-      CSVUtil.write(path + "100.csv", CSVUtil.header2, records)
-    }
-
-    disambiguate()
     ss.stop()
-    //analyzeByName(graph, name)
-    //    val records = analyze(graph, path + "18.txt")
-    //    val r=getResultByName(graph,name)
-    //    println(r.toString)
-
-
   }
 }
