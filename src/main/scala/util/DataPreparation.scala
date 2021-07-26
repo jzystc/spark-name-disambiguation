@@ -1,270 +1,312 @@
 package util
 
+import com.alibaba.fastjson
+import com.alibaba.fastjson.JSONObject
+import na.AuthorNetwork
+import na.AuthorNetwork.{EdgeAttr, VertexAttr}
+import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.ml.feature.Word2VecModel
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.ml.linalg.{DenseVector, Vector}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import scala.Array.range
+import scala.collection.mutable.ArrayBuffer
+import scala.util.control.Breaks.{break, breakable}
+
+/**
+ * 数据准备
+ */
 object DataPreparation {
 
-  //  def prepare(ss: SparkSession, path: String, name: String): Unit = {
-  //    //    import spark.implicits._
-  //    //获取dataframe读取器 从数据库中读取数据为dataframe
-  //    val dfReader = DBUtil.getDataFrameReader(ss)
-  //    var authors: String = "authors"
-  //    var papers: String = "papers"
-  //    if (name != "") {
-  //      authors = name + "_authors"
-  //      papers = name + "_papers"
-  //    }
-  //    val authorsDF = dfReader.option("dbtable", authors).load()
-  //    val papersDF = dfReader.option("dbtable", papers).load()
-  //    //  table authors join papers by paper_id, and delete column "paper_id".
-  //    var vertexDF = authorsDF.join(papersDF,
-  //      authorsDF("paper_id") === papersDF("paper_id"), "inner")
-  //      .toDF()
-  //      .drop("paper_id")
-  //    val lAuthorsDF = authorsDF.withColumnRenamed("id", "srcId")
-  //    //change column name
-  //    //    authorsDF.createOrReplaceTempView("authortemp")
-  //    val rAuthorsDF = authorsDF.withColumnRenamed("id", "dstId")
-  //    //    val edgeDF = ss.sql("select authortemp.id,authortemp.id from authortemp where authortemp.paper_id = authortemp.paper_id and authortemp.id != authortemp.id" ).show(10)
-  //    //构建link边dataframe
-  //    var linkDF = lAuthorsDF.join(rAuthorsDF,
-  //      //条件1 作者名相同
-  //      lAuthorsDF("name") === rAuthorsDF("name")
-  //        //条件2 srcId < dstId 避免重复组合
-  //        && lAuthorsDF("srcId") < rAuthorsDF("dstId")
-  //        //条件3 paper_id不同
-  //        && lAuthorsDF("paper_id") =!= rAuthorsDF("paper_id"), "inner")
-  //      //删除重复列
-  //      .drop("paper_id", "name", "org", "id")
-  //
-  //    //生成第一个边属性
-  //    linkDF = linkDF.withColumn("label", linkDF("srcId") * 0.0)
-  //    var coauthorDF = lAuthorsDF.join(rAuthorsDF,
-  //      lAuthorsDF("paper_id") === rAuthorsDF("paper_id") && lAuthorsDF("srcId") < rAuthorsDF("dstId"), "inner")
-  //      .drop("paper_id", "name", "org", "id")
-  //
-  //    coauthorDF = coauthorDF.withColumn("label", coauthorDF("srcId") * 0.0 + 2.0)
-  //
-  //    var edgeDF = coauthorDF.union(linkDF)
-  //    edgeDF = edgeDF.withColumn("orgSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("coauthorSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("titleSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("abstractSim", edgeDF("label") * 0.0)
-  //
-  //    //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "org", "orgVec")
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "title", "titleVec")
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "abstract", "abstractVec")
-  //      .drop("paper_id", "venue")
-  //    //保存节点和边dataframe为parquet文件到磁盘上
-  //    //vertex dataframe 导出路径
-  //    val vp = path + name + "/input_v"
-  //    //edge dataframe 导出路径
-  //    val ep = path + name + "/input_e"
-  //    //写入parquet文件到指定路径
-  //    vertexDF.write.parquet(vp)
-  //    edgeDF.write.parquet(ep)
-  //  }
+  /**
+   * 从json文件中生成构建网络需要的parquet文件
+   *
+   * @param ss    SparkSession
+   * @param pubs  json路径
+   * @param model word2vec模型,用于转化字符串为词向量
+   * @return Graph 返回文献网络对象
+   */
+  def prepare(ss: SparkSession, pubs: JSONObject, pids: Array[String], name: String, model: Word2VecModel,
+              venuesDF: DataFrame, numPartitions: Int): Graph[VertexAttr, EdgeAttr] = {
+    val vertexArray = new ArrayBuffer[(Long, String, String, String, String, Array[String], Int, String, String)]()
+    //节点从1开始编号
+    var vertexId = 1L
+    //    遍历json中的每篇文章
+    //    var cnt = 0
+    for (paperId <- pids) {
+      breakable {
+        val paperJsonObj = pubs.getJSONObject(paperId)
+        var text = paperJsonObj.getString("title")
+        if (paperJsonObj.get("abstract") != null) {
+          text = text + ". " + paperJsonObj.getString("abstract")
+        }
+        val year = paperJsonObj.getInteger("year").asInstanceOf[Int]
+        val venue = paperJsonObj.getString("venue").trim
+        val authorsJsonArr: fastjson.JSONArray = paperJsonObj.getJSONArray("authors")
+        val coauthors = ArrayBuffer[String]()
+        val iterator = authorsJsonArr.iterator
+        var org = ""
+        while (iterator.hasNext) {
+          val author = iterator.next.asInstanceOf[fastjson.JSONObject]
+          //          val authorName = author.getString("name").split('_').sorted.mkString("_")
+          val authorName = author.getString("name")
+          if (authorName != "") {
+            coauthors.append(authorName)
+            if (name.equals(authorName)) {
+              org = author.getString("org")
+            }
+          }
+          //          val sortedName = name.split('_').sorted.mkString("_")
 
-  //  /**
-  //    * 从数据库中读取数据构建作者网络的节点和边dataframe并保存到磁盘的指定位置
-  //    *
-  //    * @param name 数据库表名
-  //    */
-
-  //  def prepareByName(ss: SparkSession, name: String, path: String) {
-  //
-  //    //获取dataframe读取器 从数据库中读取数据为dataframe
-  //    val dfReader = DBUtil.getDataFrameReader(ss)
-  //    //读取指定表中的数据
-  //    var vertexDF = dfReader.option("dbtable", name).load()
-  //
-  //    //读取表中的数据并将id列重命名为srcId
-  //    val lVertexDF = vertexDF.withColumnRenamed("id", "srcId")
-  //    //读取表中的数据并将id列重命名为dstId
-  //    val rVertexDF = vertexDF.withColumnRenamed("id", "dstId")
-  //
-  //    //构建link边dataframe
-  //    var linkDF = lVertexDF.join(rVertexDF,
-  //      //条件1 作者名相同
-  //      lVertexDF("name") === rVertexDF("name")
-  //        //条件2 srcId < dstId 避免重复组合
-  //        && lVertexDF("srcId") < rVertexDF("dstId")
-  //        //条件3 paper_id不同
-  //        && lVertexDF("paper_id") =!= rVertexDF("paper_id"), "inner")
-  //      //删除重复列
-  //      .drop("paper_id", "name", "org", "author_id", "title", "abstract", "venue", "year", "keywords")
-  //    //生成第一个边属性
-  //    linkDF = linkDF.withColumn("label", linkDF("srcId") * 0.0)
-  //
-  //    //合作者关系dataframe
-  //    var coauthorDF = lVertexDF.join(rVertexDF,
-  //      lVertexDF("paper_id") === rVertexDF("paper_id") && lVertexDF("srcId") < rVertexDF("dstId"), "inner")
-  //      .drop("paper_id", "name", "org", "author_id", "title", "abstract", "venue", "year", "keywords")
-  //    coauthorDF = coauthorDF.withColumn("label", coauthorDF("srcId") * 0.0 + 2.0)
-  //
-  //    var edgeDF = coauthorDF.union(linkDF)
-  //    edgeDF = edgeDF.withColumn("oldLabel", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("orgSim", edgeDF("label") * 0.0)
-  //
-  //    //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
-  //    //    vertexDF = Training.fitTfIdf(vertexDF, "title", "titleVec")
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "title", "titleVec")
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "org", "orgVec")
-  //    vertexDF = Training.fitWord2Vec(vertexDF, "abstract", "abstractVec")
-  //      .drop("paper_id", "venue")
-  //
-  //    //保存节点和边dataframe为parquet文件到磁盘上
-  //    //vertex dataframe 导出路径
-  //    val vp = path + name + "/input_v"
-  //    //edge dataframe 导出路径
-  //    val ep = path + name + "/input_e"
-  //    //写入parquet文件到指定路径
-  //    vertexDF.write.parquet(vp)
-  //    edgeDF.write.parquet(ep)
-  //    vertexDF.show(1)
-  //    edgeDF.show(1)
-  //  }
-
-  def prepareML(ss: SparkSession, name: String, path: String, model: Word2VecModel): Unit = {
-    //    import spark.implicits._
-    //获取dataframe读取器 从数据库中读取数据为dataframe
-    var authors: String = "authors"
-    var papers: String = "papers"
-    if (name != "all") {
-      authors = name + "_authors"
-      papers = name + "_papers"
+        }
+        val vertex = (vertexId, paperId, "", name, org, coauthors.toArray, year, text, venue)
+        vertexArray.append(vertex)
+        vertexId += 1
+      }
     }
-
-    val dfReader = DBUtil.getDataFrameReader(ss)
-    val authorsDF = dfReader.option("dbtable", authors).load()
-      //.where("org is not null")
-    val papersDF = dfReader.option("dbtable", papers).load()
-    //  table authors join papers by paper_id, and delete column "paper_id".
-    var vertexDF = authorsDF.join(papersDF,
-      authorsDF("paper_id") === papersDF("paper_id"), "inner")
-      .toDF()
-      .drop(authorsDF("paper_id"))
-
-    val lAuthorsDF = authorsDF.withColumnRenamed("id", "srcId")
-    //change column name
-
-    val rAuthorsDF = authorsDF.withColumnRenamed("id", "dstId")
-
-    //构建link边dataframe
-    var linkDF = lAuthorsDF.join(rAuthorsDF,
+    val edgeRDD = generateEdges(ss, pids.length)
+    //    val edgeRDD=ss.parallelize(edgeArray)
+    var vertexDF = ss.createDataFrame(vertexArray).toDF("id", "paperId", "authorId", "name", "org",
+      "coauthors", "year", "text", "venue")
+    // vertexDF.repartition(numPartitions)
+    //vertexDF中的org转换成向量
+    vertexDF = TrainingUtil.transSentence2Vec(vertexDF, "org", "orgVec", model)
+    //paperDF中的text转换成向量
+    vertexDF = TrainingUtil.transSentence2Vec(vertexDF, "text", "textVec", model)
+    // venuesDF.repartition(numPartitions)
+    vertexDF = vertexDF.join(venuesDF,
       //条件1 作者名相同
-      lAuthorsDF("name") === rAuthorsDF("name")
-        //条件2 srcId < dstId 避免重复组合
-        && lAuthorsDF("srcId") < rAuthorsDF("dstId")
-        //条件3 paper_id不同
-        && lAuthorsDF("paper_id") =!= rAuthorsDF("paper_id"), "inner")
+      vertexDF("venue") === venuesDF("venue"), "left")
       //删除重复列
-      .drop("paper_id", "name", "org", "author_id")
-
-    //生成第一个边属性
-    linkDF = linkDF.withColumn("label", linkDF("srcId") * 0.0)
-    var coauthorDF = lAuthorsDF.join(rAuthorsDF,
-      lAuthorsDF("paper_id") === rAuthorsDF("paper_id") && lAuthorsDF("srcId") < rAuthorsDF("dstId"), "inner")
-      .drop("paper_id", "name", "org", "author_id")
-
-    coauthorDF = coauthorDF.withColumn("label", coauthorDF("srcId") * 0.0 + 2.0)
-
-    var edgeDF = coauthorDF.union(linkDF)
-    edgeDF = edgeDF.withColumn("orgSim", edgeDF("label") * 0.0)
-    edgeDF = edgeDF.withColumn("coauthorSim", edgeDF("label") * 0.0)
-    edgeDF = edgeDF.withColumn("textSim", edgeDF("label") * 0.0)
-    edgeDF = edgeDF.withColumn("yearSim", edgeDF("label") * 0.0)
-    //    edgeDF = edgeDF.withColumn("titleSim", edgeDF("label") * 0.0)
-    //    edgeDF = edgeDF.withColumn("abstractSim", edgeDF("label") * 0.0)
-
-    //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
-    //    vertexDF = Training.fitTfIdf(vertexDF, "title", "titleVec")
-    //TODO:合并abstract和title
-    import org.apache.spark.sql.functions._
-    vertexDF.na.fill("", Array("abstract", "title"))
-    vertexDF = vertexDF.select(vertexDF("id"), vertexDF("name"), vertexDF("org"), vertexDF("year"), vertexDF("author_id"), vertexDF("paper_id"), concat_ws(",", vertexDF("title"), vertexDF("abstract")).cast(StringType).as("text"))
-    vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
-    vertexDF = GlobalTraining.trans(vertexDF, "text", "textVec", model)
-    //    vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
-    //    vertexDF = GlobalTraining.trans(vertexDF, "abstract", "abstractVec", model)
-    //    vertexDF = GlobalTraining.trans(vertexDF, "title", "titleVec", model)
-    //保存节点和边dataframe为parquet文件到磁盘上
-    //vertex dataframe 导出路径
-    val vp = path + name + "/ml_input_v"
-    //edge dataframe 导出路径
-    val ep = path + name + "/ml_input_e"
-    //写入parquet文件到指定路径
-    vertexDF.show(1,truncate = false)
-    edgeDF.show(1,truncate = false)
-    vertexDF.write.parquet(vp)
-    edgeDF.write.parquet(ep)
+      .drop("venue")
+    val vertexRDD = vertexDF2RDD(ss, vertexDF)
+    Graph(vertexRDD, edgeRDD)
   }
 
   /**
-    * 从数据库中读取数据构建用于构建逻辑回归模型的作者网络的节点和边dataframe并保存到磁盘的指定位置
-    *
-    */
-  //  def prepareMLByName(ss: SparkSession, name: String, path: String, model: Word2VecModel) {
-  //
-  //    //获取dataframe读取器 从数据库中读取数据为dataframe
-  //    val dfReader = DBUtil.getDataFrameReader(ss)
-  //    //读取指定表中的数据
-  //    var vertexDF = dfReader.option("dbtable", name).load()
-  //    //    tabelDF.createOrReplaceTempView("table")
-  //    //    var vertexDF=ss.sql("select id,name,id,org,paper_id,title,year,abstract from table")
-  //    //读取表中的数据并将id列重命名为srcId
-  //    val lVertexDF = vertexDF.withColumnRenamed("id", "srcId")
-  //    //读取表中的数据并将id列重命名为dstId
-  //    val rVertexDF = vertexDF.withColumnRenamed("id", "dstId")
-  //
-  //    //构建link边dataframe
-  //    var linkDF = lVertexDF.join(rVertexDF,
-  //      //条件1 作者名相同
-  //      lVertexDF("name") === rVertexDF("name")
-  //        //条件2 srcId < dstId 避免重复组合
-  //        && lVertexDF("srcId") < rVertexDF("dstId")
-  //        //条件3 paper_id不同
-  //        && lVertexDF("paper_id") =!= rVertexDF("paper_id"), "inner")
-  //      //删除重复列
-  //      .drop("paper_id", "name", "org", "venue", "author_id", "title", "abstract", "year", "keywords")
-  //    //生成第一个边属性
-  //    linkDF = linkDF.withColumn("label", linkDF("srcId") * 0.0)
-  //
-  //    //合作者关系dataframe
-  //    var coauthorDF = lVertexDF.join(rVertexDF,
-  //      lVertexDF("paper_id") === rVertexDF("paper_id") && lVertexDF("srcId") < rVertexDF("dstId"), "inner")
-  //      .drop("paper_id", "name", "org", "author_id", "venue", "title", "abstract", "year", "keywords")
-  //    coauthorDF = coauthorDF.withColumn("label", coauthorDF("srcId") * 0.0 + 2.0)
-  //
-  //    var edgeDF = coauthorDF.union(linkDF)
-  //    edgeDF = edgeDF.withColumn("orgSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("coauthorSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("titleSim", edgeDF("label") * 0.0)
-  //    edgeDF = edgeDF.withColumn("abstractSim", edgeDF("label") * 0.0)
-  //
-  //    //使用spark的tfidf模型对初始vertexDF中的标题文本进行训练,返回一个新的dataframe,字符串转换为向量表示
-  //    //    vertexDF = Training.fitTfIdf(vertexDF, "title", "titleVec")
-  //
-  //    vertexDF = GlobalTraining.trans(vertexDF, "org", "orgVec", model)
-  //    vertexDF = GlobalTraining.trans(vertexDF, "abstract", "abstractVec", model)
-  //    vertexDF = GlobalTraining.trans(vertexDF, "title", "titleVec", model)
-  //    //    vertexDF = Training.fitWord2Vec(vertexDF, "org", "orgVec")
-  //    //    vertexDF = Training.fitWord2Vec(vertexDF, "title", "titleVec")
-  //    //    vertexDF = Training.fitWord2Vec(vertexDF, "abstract", "abstractVec")
-  //    //保存节点和边dataframe为parquet文件到磁盘上
-  //    //vertex dataframe 导出路径
-  //    val vp = path + name + "/ml_input_v"
-  //    //edge dataframe 导出路径
-  //    val ep = path + name + "/ml_input_e"
-  //    //写入parquet文件到指定路径
-  //    vertexDF.write.parquet(vp)
-  //    edgeDF.write.parquet(ep)
-  //    vertexDF.show(1)
-  //    edgeDF.show(1)
-  //  }
+   * @param numVertices number of vertices
+   * @return edgeRDD
+   */
+  def generateEdges(ss: SparkSession, numVertices: Int): RDD[Edge[EdgeAttr]] = {
+    val edgeArray = ArrayBuffer[Edge[EdgeAttr]]()
+    val vids = range(1, numVertices + 1, 1)
+    for (i <- (0 until numVertices - 2)) {
+      for (j <- (i + 1 until numVertices - 1)) {
+        edgeArray.append(Edge(vids(i).toLong, vids(j).toLong, (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)))
+      }
+    }
+    val edgeRDD = ss.sparkContext.makeRDD(edgeArray)
+    edgeRDD
+  }
+
+  def generateVertices(name: String, authorId: String, paperIds: Array[String], pubs: JSONObject): Unit = {
+
+  }
+
+  def prepareForTraining(ss: SparkSession, pubs: JSONObject, aidPids: JSONObject, name: String, model: Word2VecModel,
+                         venuesDF: DataFrame, numPartitions: Int): Graph[VertexAttr, EdgeAttr] = {
+    val vertexArray = new ArrayBuffer[(Long, String, String, String, String, Array[String], Int, String, String)]()
+    //节点从1开始编号
+    var vertexId = 1L
+    //    遍历json中的每篇文章
+    //    var cnt = 0
+    val aids = aidPids.keySet().toArray[String](Array[String]())
+    //    val listType = new TypeReference[Array[String]]() {}
+    var numPapers = 0
+    var cntSkip = 0
+    var nSkipVenue = 0
+    var nSkipOrg = 0
+    var nSkipAuthor = 0
+    for (aid <- aids) {
+      //      println(aid)
+      val pids = aidPids.getJSONArray(aid).toArray[String](Array[String]())
+      //      val pids = aidPids.getJSONArray(aid).
+      numPapers += pids.length
+      //      println(aid, pids.length)
+      for (paperId <- pids) {
+        //        print(paperId)
+        breakable {
+          val paperJsonObj = pubs.getJSONObject(paperId)
+          val title = paperJsonObj.getString("title")
+          val paperAbstract = paperJsonObj.getString("abstract")
+          val text = title + " " + paperAbstract
+          val year = paperJsonObj.getInteger("year").asInstanceOf[Int]
+          val venue = paperJsonObj.getString("venue").trim
+          //skip paper without venue
+          if ("".equals(venue)) {
+            //            println("skip: venue is null")
+            //            cntSkip += 1
+            nSkipVenue += 1
+            break()
+          }
+          val authorsJsonArr = paperJsonObj.getJSONArray("authors")
+          //skip paper with only 1 author
+          if (authorsJsonArr.size() <= 1) {
+            //            println("skip: no author/only 1 author")
+            //            cntSkip += 1
+            nSkipAuthor += 1
+            break()
+          }
+          val coauthors = ArrayBuffer[String]()
+          val iterator = authorsJsonArr.iterator
+          var org = ""
+          while (iterator.hasNext) {
+            val author = iterator.next.asInstanceOf[fastjson.JSONObject]
+            //            val authorName = author.getString("name").toLowerCase.replace(".", "")
+            //              .replace("-", "").replace(" ", "_")
+            //            val authorName = author.getString("name").split('_').sorted.mkString("_")
+            val authorName = author.getString("name")
+            if (authorName != "") {
+              coauthors.append(authorName)
+              //              val sortedName = name.split('_').sorted.mkString("_")
+              //              if (sortedName.equals(authorName.split('_').sorted.mkString("_"))) {
+              //                //skip paper without author's affiliation
+              //                              org = author.getString("org")
+              //                              if ("".equals(org)) {
+              //                                println("skip: org is null")
+              //                                cntSkip += 1
+              //                                break()
+              //                              }
+              //                            }
+              if (name.equals(authorName)) {
+                org = author.getString("org")
+                if ("".equals(org)) {
+                  //                  println("skip: org is null")
+                  //                  cntSkip += 1
+                  nSkipOrg += 1
+                  break()
+                }
+              }
+            }
+          }
+
+          val vertex = (vertexId, paperId, aid, name, org, coauthors.toArray, year, text, venue)
+          //                println(vertex._5)
+          vertexArray.append(vertex)
+          vertexId += 1
+        }
+      }
+    }
+    println(s"skip $nSkipOrg: org is null")
+    println(s"skip $nSkipAuthor: no author/only 1 author ")
+    println(s"skip $nSkipVenue: venue is null")
+    cntSkip = nSkipAuthor + nSkipOrg + nSkipVenue
+    println(s"n_papers: $numPapers\t skip: $cntSkip")
+    var vertexDF = ss.createDataFrame(vertexArray).toDF("id", "paperId", "authorId", "name", "org",
+      "coauthors", "year", "text", "venue").repartition(numPartitions)
+    //vertexDF中的org转换成向量
+    vertexDF = TrainingUtil.transSentence2Vec(vertexDF, "org", "orgVec", model)
+    //paperDF中的text转换成向量
+    vertexDF = TrainingUtil.transSentence2Vec(vertexDF, "text", "textVec", model)
+    vertexDF = vertexDF.join(venuesDF,
+      //条件1 作者名相同
+      vertexDF("venue") === venuesDF("venue"), "inner")
+      //删除重复列
+      .drop("venue")
+    //    vertexDF.show(500)
+    val vertexRDD = vertexDF2RDD(ss, vertexDF)
+    //    vertexRDD.foreach(v => println(v._2._4 == null, v._2._6 == null, v._2._7 == null, v._2._8 == null))
+    val edgeRDD = generateEdges(ss, numPapers - cntSkip).repartition(numPartitions)
+    Graph(vertexRDD, edgeRDD)
+  }
+
+  /**
+   * 将vertexDataFrame转换成rdd
+   *
+   * @param ss
+   * @param vertexDF
+   * @return
+   */
+  def vertexDF2RDD(ss: SparkSession, vertexDF: DataFrame, numPartitions: Int = 210): RDD[(VertexId, VertexAttr)] = {
+    //    vertexDF.show(1)
+    //   VertexAttr = (Name, AuthorId, OrgVec, PaperId, Year, TextVec, VenueVec)
+    val vertexRDD = vertexDF.select("id", "paperId", "authorId", "name", "orgVec", "coauthors",
+      "year", "textVec", "venueVec").rdd.repartition(numPartitions).map(x =>
+      (
+        //vertexId
+        x(0) match {
+          case i: Int => i.asInstanceOf[Int].toLong
+          case j: Long => j.asInstanceOf[Long]
+        },
+        (
+          //paperId
+          x(1).asInstanceOf[String],
+          //authorId
+          {
+            if (x(2) != null)
+              x(2).asInstanceOf[String]
+            else
+              ""
+          },
+          //authorName
+          x(3).asInstanceOf[String],
+          //org
+          x(4).asInstanceOf[Vector],
+          x(5).asInstanceOf[Seq[String]].toArray,
+          //发表年份
+          x(6) match {
+            case i: Long => i.asInstanceOf[Long].toInt
+            case j: Int => j.asInstanceOf[Int]
+          },
+          //标题与摘要的向量
+          x(7) match {
+            case i: Seq[Double] => new DenseVector(i.asInstanceOf[Seq[Double]].toArray)
+            case j: Vector => j.asInstanceOf[Vector]
+          },
+          //会议/期刊名对应的向量
+          x(8) match {
+            case i: Seq[Double] => new DenseVector(i.asInstanceOf[Seq[Double]].toArray)
+            case j: Vector => j.asInstanceOf[Vector]
+          }
+        )
+      ))
+    vertexRDD
+  }
+
+  def edgeDF2RDD(ss: SparkSession, edgeDF: DataFrame): RDD[Edge[EdgeAttr]] = {
+    val edgeRDD = edgeDF.select("srcId", "dstId", "label", "orgSim", "coauthorSim",
+      "textSim", "yearSim", "venueSim").rdd.map(x =>
+      //srcId,源节点id,类型为Long
+      Edge(
+        x(0) match {
+          case i: Int => i.asInstanceOf[Int].toLong
+          case j: Long => j.asInstanceOf[Long]
+        },
+        //dstId,目的节点id,类型为Long
+        x(1) match {
+          case i: Int => i.asInstanceOf[Int].toLong
+          case j: Long => j.asInstanceOf[Long]
+        },
+        //attributes
+        (
+          //label
+          x(2).asInstanceOf[Double],
+          //orgSim
+          x(3).asInstanceOf[Double],
+          //coauthorSim
+          x(4).asInstanceOf[Double],
+          //textSim
+          x(5).asInstanceOf[Double],
+          //yearSim
+          x(6).asInstanceOf[Double],
+          //venueSim
+          x(7).asInstanceOf[Double]
+        )
+      )
+    )
+    edgeRDD
+  }
+
+  def getVenueDF(ss: SparkSession, venueTextPath: String, w2vModel: Word2VecModel, numPartitions: Int): DataFrame = {
+    //    val schema = StructType(List(
+    //      StructField("venue", StringType, nullable = false),
+    //      StructField("text", StringType, nullable = false)
+    //    ))
+    val df = ss.read.format("json").load(venueTextPath)
+    val venueDF = TrainingUtil.transSentence2Vec(df, "text", "venueVec", model = w2vModel)
+    venueDF
+  }
 
 
   def main(args: Array[String]): Unit = {
@@ -272,9 +314,35 @@ object DataPreparation {
     val ss: SparkSession = SparkSession.builder()
       .appName(this.getClass.getName)
       //若在本地运行需要设置为local
-      .master("local[*]")
+      .config("spark.executor.memory", "6g")
+      .master("local[1]")
       .getOrCreate()
+    val word2VecModel = Word2VecModel.load("D:/vmshare/word2vec_100")
 
+    //    //    val jsonPath = "D:\\Users\\jzy\\Documents\\PycharmProjects\\dataprocessing\\author-disambiguation\\result2.json"
+    val pubsJsonPath = "D:/sigir2020/kdd/clean_pubs.json"
+
+    val pubs = JsonUtil.loadJson(pubsJsonPath)
+    val name = "huibin_xu"
+    val aidPids = JsonUtil.loadJson("d:/sigir2020/kdd/name_train_500.json").getJSONObject(name)
+
+    //    val venueJsonPath = "D:/na-contest/venues.json"
+    //    //    val savePath = "D:\\Users\\jzy\\Documents\\PycharmProjects\\dataprocessing\\author-disambiguation"
+    //    val savePath = "D:/na-contest/sna"
+    //    //    val name = "test_pubs"
+    //    val pubs = JsonUtil.loadJson(pubsJsonPath)
+    //    val venues=JsonUtil.loadJson(venueJsonPath)
+    //    prepare(ss, pubs, name, word2VecModel, venueJsonPath, 30)\
+    val venueTextPath = "d:/sigir2020/kdd/clean_venues.json"
+    //    val df = ss.read.format("json").load(venueTextPath)
+    val venueDF = getVenueDF(ss, venueTextPath, word2VecModel, 1)
+    val graph = DataPreparation.prepareForTraining(ss, pubs, aidPids, name, word2VecModel, venueDF, 1)
+    //        val trainingData = AuthorNetwork.trainingTextAndVenue(graph)
+    val trainingData = AuthorNetwork.training(ss, graph)
+    print(trainingData.count())
+    //    import ss.implicits._
+    //    val trainingDataDF = trainingData.map(x => edge(x.attr._1, Seq[Double](x.attr._2, x.attr._3, x.attr._4, x.attr._5, x.attr._6))).toDF()
+    //    trainingDataDF.show()
     ss.close()
   }
 }

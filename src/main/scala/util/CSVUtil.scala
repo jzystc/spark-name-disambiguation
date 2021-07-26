@@ -9,9 +9,9 @@ import com.csvreader.{CsvReader, CsvWriter}
   */
 object CSVUtil {
 
-  val header1: Array[String] = Array[String]("name", "real num", "exp num", "precision", "recall", "f-score")
-  val header2: Array[String] = Array[String]("name", "exp num", "precision", "recall", "f-score")
-  val header3: Array[String] = Array[String]("name", "precision", "recall", "f-score")
+  val HEADER_REAL_EXP_PRF: Array[String] = Array[String]("name", "real num", "exp num", "precision", "recall", "f-score")
+  val HEADER_EXP_PRF: Array[String] = Array[String]("name", "exp num", "precision", "recall", "f-score")
+  val HEADER_PRF: Array[String] = Array[String]("name", "precision", "recall", "f-score")
 
   /**
     * 读取指定路径下的csv文件
@@ -19,7 +19,6 @@ object CSVUtil {
     * @param path 文件路径
     */
   def read(path: String, columns: Array[String]): Unit = {
-
     // 创建CSV读对象
     val csvReader = new CsvReader(path)
     // 读表头
@@ -31,19 +30,18 @@ object CSVUtil {
       for (column <- columns) {
         println(csvReader.get(column))
       }
-
     }
   }
 
 
   /**
-    * 读取指定路径下的csv文件
+    *写入records到指定路径下的csv文件
     *
     * @param path    文件路径
     * @param header  表头
     * @param records 记录数组
     */
-  def write(path: String, header: Array[String] = header2, records: List[Array[String]]) {
+  def write(path: String, header: Array[String] = HEADER_EXP_PRF, records: List[Array[String]]) {
 
     // 创建CSV写对象 逗号作为分隔符
     val csvWriter = new CsvWriter(path, ',', Charset.forName("GBK"))
