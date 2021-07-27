@@ -6,11 +6,11 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="spark-name-disambiguation-master" />
+        <module name="spark-name-disambiguation" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="spark-name-disambiguation-master" target="1.5" />
+      <module name="spark-name-disambiguation" target="1.5" />
     </bytecodeTargetLevel>
   </component>
 </project>
