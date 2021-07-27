@@ -1,9 +1,10 @@
 # Name Disambiguation
-This is a Spark GraphX implementation of name disambiguation in citation database.
+This is a implementation of name disambiguation in citation databases based on Spark.
 ## Requirements
-   * scala: 2.11.12 (2.11.x)
-   * spark: 2.4.0 (2.3.x)
-   * mysql: 5.7
+* scala: 2.11.12
+* spark: 2.4.0 (2.3.x may be also compatible)
+* java: 11.0.7
+* mysql: 5.7
 ## File Structure
 * `main.AuthorNetwork`: implementation of building author network according the dataset 
 * `util.DataPreparation`: implementation of loading data from the database and generating dataframe parquet files 
