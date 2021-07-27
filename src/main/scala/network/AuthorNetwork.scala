@@ -1,4 +1,4 @@
-package na
+package network
 
 import java.io.{File, FileWriter, PrintWriter}
 import java.util
@@ -39,7 +39,7 @@ object AuthorNetwork {
    * 5.发表年份相似度
    **/
   type EdgeAttr = (Label, OrgSim, CoauthorSim, TextSim, YearSim, VenueSim)
-  type EdgeAttr2 = (Label, OrgSim, CoauthorSim, TextSim, VenueSim)
+  type EdgeAttrWithoutYearSim = (Label, OrgSim, CoauthorSim, TextSim, VenueSim)
 
   /**
    * 定义节点属性的数据类型

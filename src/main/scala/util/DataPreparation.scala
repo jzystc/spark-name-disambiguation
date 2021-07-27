@@ -2,8 +2,8 @@ package util
 
 import com.alibaba.fastjson
 import com.alibaba.fastjson.JSONObject
-import na.AuthorNetwork
-import na.AuthorNetwork.{EdgeAttr, VertexAttr}
+import network.AuthorNetwork
+import network.AuthorNetwork.{EdgeAttr, VertexAttr}
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.ml.feature.Word2VecModel
 import org.apache.spark.ml.linalg.{DenseVector, Vector}

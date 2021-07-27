@@ -1,8 +1,8 @@
 import java.io.{File, FileWriter, IOException}
-
 import _root_.util.{DataPreparation, FileUtil, JsonUtil, TrainingUtil}
 import com.alibaba.fastjson.JSONObject
-import network.AuthorNetwork._
+import network.AuthorNetwork
+import network.AuthorNetwork.{dumpProbability, getDisambiguationResult}
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.ml.feature.Word2VecModel
 import org.apache.spark.sql.{DataFrame, SparkSession}

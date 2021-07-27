@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/spark-name-disambiguation.iml" filepath="$PROJECT_DIR$/.idea/spark-name-disambiguation.iml" />
+      <module fileurl="file://$PROJECT_DIR$/spark-name-disambiguation.iml" filepath="$PROJECT_DIR$/spark-name-disambiguation.iml" />
     </modules>
   </component>
 </project>
