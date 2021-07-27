@@ -7,10 +7,10 @@ The name disambiguation task is to divide these papers into different clusters w
 ## Algorithm
 1. Build a graph where nodes represent papers and edges represent two nodes contain the same author name.
 2. Extract raw features from papers. Features include title, abstract, author names, organizations, venue, publication year.
-3. Transfer the title, abstract, orgnizations into vectors by Word2Vec
+3. Transfer the title, abstract, organizations into vectors by Word2Vec
 4. Train the logistic regression model
 5. Classify edges. class 1 means two papers belong to the same author, class 0 means they belong to different authors
-
+6. Generate connected components from the graph according to the class of edges.
 ## Requirements
 * Scala: 2.11.12 with jdk11 or 2.11.8 with jdk8
 * Spark: 2.4.0 (2.3.x may be also compatible)
@@ -47,3 +47,16 @@ spark-submit --executor-cores 2 \
     --master ```spark://DriverNodeIp:17077 \
     --class entity.AuthorNetwork /path/to/jar/filename.jar \
     0.6 0.5 0.35 \
+```
+## Reference
+If you found this repo useful, please cite the paper.
+```
+@article{chen2021supervised,
+  title={A supervised and distributed framework for cold-start author disambiguation in large-scale publications},
+  author={Chen, Yibo and Jiang, Zhiyi and Gao, Jianliang and Du, Hongliang and Gao, Liping and Li, Zhao},
+  journal={Neural Computing and Applications},
+  pages={1--16},
+  year={2021},
+  publisher={Springer}
+}
+```
