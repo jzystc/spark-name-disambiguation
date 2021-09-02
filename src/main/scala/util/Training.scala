@@ -2,7 +2,7 @@ package util
 
 import java.io.{File, FileOutputStream, PrintWriter}
 
-import main.AuthorNetwork.{EdgeML, VertexAttr}
+import network.AuthorNetwork.{EdgeAttr, VertexAttr}
 import org.apache.spark.graphx.{Edge, Graph}
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
@@ -20,7 +20,7 @@ object Training {
     * @param graph 作者网络图
     * @return
     */
-  def getDataIncludingName(ss: SparkSession, graph: Graph[VertexAttr, EdgeML]): DataFrame = {
+  def getDataIncludingName(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr]): DataFrame = {
     val row = graph.triplets.filter(_.attr._1 != 2).map(x => {
       //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
       val indices = Array(0, 1, 2, 3)
@@ -40,7 +40,7 @@ object Training {
     * @param graph
     * @return
     */
-  def getData(ss: SparkSession, graph: Graph[VertexAttr, EdgeML]): DataFrame = {
+  def getData(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr]): DataFrame = {
     val row = graph.edges.filter(_.attr._1 != 2).map(x =>
       //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
     {
@@ -82,8 +82,8 @@ object Training {
     rescaledData.drop("rawFeatures")
   }
 
-  def saveLibsvm(ss: SparkSession, graph: Graph[VertexAttr, EdgeML], path: String) {
-    def transform: Edge[EdgeML] => String = x => {
+  def saveLibsvm(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr], path: String) {
+    def transform: Edge[EdgeAttr] => String = x => {
       val label = x.attr._1
       val orgSim = x.attr._2
       val coauthorSim = x.attr._3
