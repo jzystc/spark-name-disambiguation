@@ -82,7 +82,7 @@ object AnalysisUtil {
       (e.srcId, e.dstId)
     }).collect.toSet
 
-    for (arr <- componentsRDD if arr.length > 1) {
+    for (arr <- componentsRDD) {
       val filename = s"$path/${arr(0)}.txt"
       val out = new FileWriter(filename, false)
       val result = pairs.filter(x => arr.contains(x._1))
@@ -387,6 +387,7 @@ object AnalysisUtil {
 
   def get2JumpPair(graph: Graph[String, Double]): Set[(Long, Long)] = {
     type VMap = Map[VertexId, Int] //定义每个节点存放的数据类型，为若干个（节点编号，一个整数）构成的map，当然发送的消息也得遵守这个类型
+
     /**
      * 节点数据的更新 就是集合的union
      */
@@ -543,6 +544,7 @@ object AnalysisUtil {
       // println(analyzeByClustering(name, expPairs, truePairs, soleNum + clusterNum).mkString(","))
       val record = analyzeByClustering(name, expPairs, truePairs, clusterNum)
     }
+
     //run("89.txt")
     //evaluate("test.txt", "test")
     val name = "xu_xu"

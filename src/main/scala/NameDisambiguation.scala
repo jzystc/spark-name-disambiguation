@@ -275,6 +275,8 @@ object NameDisambiguation {
 
   def main(args: Array[String]): Unit = {
     // 初始化SparkSession
+
+
     val ss: SparkSession = SparkSession.builder()
       .appName("Author Disambiguation")
       //      .config("spark.sql.broadcastTimeout", "36000")

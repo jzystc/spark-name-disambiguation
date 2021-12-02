@@ -1,10 +1,8 @@
 package util
 
 import java.io.{File, FileOutputStream, PrintWriter}
-
 import com.alibaba.fastjson.JSONObject
-import na.AuthorNetwork.{EdgeAttr, VertexAttr}
-import na.AuthorNetwork
+import network.AuthorNetwork.{EdgeAttr, VertexAttr}
 import org.apache.spark.graphx.{Edge, EdgeRDD, Graph}
 import org.apache.spark.ml.classification.{RandomForestClassificationModel, RandomForestClassifier, _}
 import org.apache.spark.ml.clustering.KMeans
@@ -13,11 +11,11 @@ import org.apache.spark.ml.feature._
 import org.apache.spark.ml.linalg.{SparseVector, Vector}
 import org.apache.spark.ml.regression.{GeneralizedLinearRegression, GeneralizedLinearRegressionModel}
 import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder, TrainValidationSplit}
+import org.apache.spark.sql.functions.max
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.{Source, StdIn}
-import scala.util.control.Breaks._
 
 object TrainingUtil {
   def generateMissingFeaturePredictionTrainingData(ss: SparkSession, data: DataFrame): Unit = {
@@ -25,16 +23,6 @@ object TrainingUtil {
   }
 
   def trainRegression(ss: SparkSession, training: DataFrame): GeneralizedLinearRegressionModel = {
-
-    // Load training data
-    //    val training = ss.read.format("libsvm")
-    //      .load("data/mllib/sample_linear_regression_data.txt")
-    //    val lr = new LinearRegression()
-    //      .setMaxIter(10)
-    //      .setRegParam(0.3)
-    //      .setElasticNetParam(0.8)
-    //    // Fit the model
-    //    val lrModel = lr.fit(training)
     val glr = new GeneralizedLinearRegression()
       .setFamily("gaussian")
       .setLink("identity")
@@ -54,32 +42,6 @@ object TrainingUtil {
     //    println(s"RMSE: ${summary.rootMeanSquaredError}")
     //    println(s"r2: ${summary.r2}")
     model
-  }
-
-
-  /**
-   * 读取papers表中每篇文章的标题和摘要信息,并进行连接
-   *
-   * @param ss
-   * @return dataframe
-   */
-  def getRawTextFromDB(ss: SparkSession): DataFrame = {
-    val dfReader = DBUtil.getDataFrameReader(ss)
-    val authorsDF = dfReader.option("dbtable", "authors").load()
-    val papersDF = dfReader.option("dbtable", "papers") load()
-    authorsDF.createTempView("authors")
-    papersDF.createTempView("papers")
-    val org = ss.sql("select org from authors").toDF("text")
-    import ss.sqlContext.implicits._
-    val titleAbstract = ss.sql("select title,abstract from papers")
-    //迭代"连接"/"合并"文本,","隔开???空格是不是更合适" ".
-    val mergedTitleAbstract = titleAbstract.map(_.toSeq.foldLeft("")(_ + "," + _).substring(1)).toDF("text")
-    //union完成DataFrame合并
-    val text = org.union(mergedTitleAbstract).filter("text!=\"\"")
-    //RegexTokenizer基于正则表达式.setPattern(re),设置分词
-    //val tokenizer = new Tokenizer().setInputCol("text").setOutputCol("words")
-    //分词结果存储到dataframe
-    text
   }
 
   /**
@@ -167,26 +129,6 @@ object TrainingUtil {
     rawText
   }
 
-  /**
-   * 从图的边rdd中构造包含作者名字的训练数据
-   *
-   * @param ss    SparkSession
-   * @param graph 作者网络图
-   * @return
-   */
-  def getDataIncludingName(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr]): DataFrame = {
-    val row = graph.triplets.filter(_.attr._1 != 2).map(x => {
-      //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
-      val indices = Array(0, 1, 2, 3)
-      (x.attr._1, new SparseVector(size = indices.length, indices = indices,
-        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4))).toSparse, x.srcAttr._1)
-    })
-    import ss.implicits._
-    val df = row.toDF("label", "features", "name")
-    //df.show(20, truncate = false)
-    df
-  }
-
 
   /**
    * 从图的边rdd中构造不包含作者名字的训练数据
@@ -196,9 +138,8 @@ object TrainingUtil {
    * @return
    */
   def getData(ss: SparkSession, edgeRDD: EdgeRDD[EdgeAttr]): DataFrame = {
-    val row = edgeRDD.filter(_.attr._1 != 2).map(x =>
+    val row = edgeRDD.filter(_.attr._1 != 2).map(x => {
       //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
-    {
       val indices = Array(0, 1, 2, 3, 4)
       (x.attr._1, new SparseVector(size = indices.length, indices = indices,
         values = Array(Math.max(0, x.attr._2), x.attr._3, Math.max(0, x.attr._4), x.attr._5, Math.max(0, x.attr._6))).toSparse)
@@ -255,7 +196,7 @@ object TrainingUtil {
    * @param data 训练数据
    * @param path 保存路径
    */
-  def dumpRDD2Libsvm(ss: SparkSession, data: EdgeRDD[EdgeAttr], path: String, fname: String = "libsvm.txt") {
+  def dumpRDD2Libsvm(ss: SparkSession, data: EdgeRDD[EdgeAttr], path: String, fname: String = "libsvm.txt"): Unit = {
     def transform: Edge[EdgeAttr] => String = x => {
       val label = x.attr._1
       val orgSim = x.attr._2
@@ -284,7 +225,7 @@ object TrainingUtil {
     pw.close()
   }
 
-  def dumpDataForFeaturePrediction2Libsvm(ss: SparkSession, data: DataFrame, path: String, fname: String) {
+  def dumpDataForFeaturePrediction2Libsvm(ss: SparkSession, data: DataFrame, path: String, fname: String): Unit = {
     import ss.implicits._
     def transform: Row => String = x => {
       val label = x(0).asInstanceOf[Double]
@@ -319,7 +260,7 @@ object TrainingUtil {
     pw.close()
   }
 
-  def dumpDF2Libsvm(ss: SparkSession, data: DataFrame, path: String, fname: String = "libsvm.txt") {
+  def dumpDF2Libsvm(ss: SparkSession, data: DataFrame, path: String, fname: String = "libsvm.txt"): Unit = {
     import ss.implicits._
     def transform: Row => String = x => {
       val label = x(0).asInstanceOf[Double]
@@ -460,43 +401,6 @@ object TrainingUtil {
     rfModel
   }
 
-  /**
-   * 训练多层感知器分类器
-   */
-  def trainByMPC(ss: SparkSession, data: DataFrame, maxIter: Int = 10): MultilayerPerceptronClassificationModel = {
-
-    val splits = data.randomSplit(Array(0.8, 0.2), seed = 1234L)
-    val train = splits(0)
-    val test = splits(1)
-    println(s"data:${data.count()}")
-
-    // specify layers for the neural network:
-    // input layer of size 4 (features), two intermediate of size 5 and 4
-    // and output of size 3 (classes)
-    val layers = Array[Int](4, 5, 4, 2)
-
-    // create the trainer and set its parameters
-    val trainer = new MultilayerPerceptronClassifier()
-      .setLayers(layers)
-      .setBlockSize(128)
-      .setSeed(1234L)
-      .setMaxIter(maxIter)
-
-    // train the model
-    val model = trainer.fit(train)
-
-    // compute accuracy on the test set
-    val result = model.transform(test)
-    println(s"result:${result.count()}")
-    val predictionAndLabels = result.select("prediction", "label")
-    //    predictionAndLabels.filter("label==prediction and label==1.0").show(1000)
-    val evaluator = new MulticlassClassificationEvaluator()
-      .setMetricName("accuracy")
-    computePRF(ss, predictionAndLabels)
-    println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
-    ss.catalog.dropTempView("pred")
-    model
-  }
 
   /**
    * 训练线性支持向量机模型
@@ -533,18 +437,135 @@ object TrainingUtil {
   }
 
   /**
+   * 从图的边rdd中构造包含作者名字的训练数据
+   *
+   * @param ss    SparkSession
+   * @param graph 作者网络图
+   * @return
+   */
+  def getDataIncludingName(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr]): DataFrame = {
+    val row = graph.triplets.filter(_.attr._1 != 2).map(x => {
+      //小于0的余弦相似分数置为0;;过滤小于0的相似分数.
+      val indices = Array(0, 1, 2, 3)
+      (x.attr._1, new SparseVector(size = indices.length, indices = indices,
+        values = Array(Math.max(0, x.attr._2), Math.max(0, x.attr._3), Math.max(0, x.attr._4))).toSparse, x.srcAttr._1)
+    })
+    import ss.implicits._
+    val df = row.toDF("label", "features", "name")
+    //df.show(20, truncate = false)
+    df
+  }
+
+  def saveLibsvm(ss: SparkSession, graph: Graph[VertexAttr, EdgeAttr], path: String): Unit = {
+    def transform: Edge[EdgeAttr] => String = x => {
+      val label = x.attr._1
+      val orgSim = x.attr._2
+      val coauthorSim = x.attr._3
+      val textSim = x.attr._4
+      //      val titleSim = x.attr._4
+      //      val abstractSim = x.attr._5
+
+      // val line = s"$label 1:$orgSim 2:$coauthorSim 3:$titleSim 4:$abstractSim \n"
+      val line = s"$label 1:$orgSim 2:$coauthorSim 3:$textSim\n"
+      line
+    }
+
+    val file = new File(path + "/libsvm.txt")
+    if (!file.exists()) {
+      file.createNewFile()
+    }
+    graph.edges.foreach(x => {
+      if (x.attr._1 != 2) {
+        val line = transform(x)
+        //        println(line)
+        val pw = new PrintWriter(new FileOutputStream(
+          file, true))
+        pw.append(line)
+        pw.flush()
+        pw.close()
+      }
+    })
+  }
+
+  /**
+   * 训练多层感知器分类器
+   */
+  def trainMPC(ss: SparkSession, data: DataFrame, maxIter: Int = 10): MultilayerPerceptronClassificationModel = {
+
+    val splits = data.randomSplit(Array(0.8, 0.2), seed = 1234L)
+    val train = splits(0)
+    val test = splits(1)
+    println(s"data:${data.count()}")
+
+
+    // specify layers for the neural network:
+    // input layer of size 4 (features), two intermediate of size 5 and 4
+    // and output of size 3 (classes)
+    val layers = Array[Int](4, 5, 4, 2)
+
+    // create the trainer and set its parameters
+    val trainer = new MultilayerPerceptronClassifier()
+      .setLayers(layers)
+      .setBlockSize(128)
+      .setSeed(1234L)
+      .setMaxIter(maxIter)
+
+    // train the model
+    val model = trainer.fit(train)
+
+    // compute accuracy on the test set
+    val result = model.transform(test)
+    println(s"result:${result.count()}")
+    val predictionAndLabels = result.select("prediction", "label")
+    //    predictionAndLabels.filter("label==prediction and label==1.0").show(1000)
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setMetricName("accuracy")
+    predictionAndLabels.createTempView("pred")
+    val fp = ss.sql("select * from pred where label!=prediction and label==0.0").count().toDouble
+
+    val tp = ss.sql("select * from pred where label==prediction and label==1.0").count().toDouble
+
+    val fn = ss.sql("select * from pred where label!=prediction and label==1.0").count().toDouble
+
+    val precision = tp / (tp + fp)
+    val recall = tp / (tp + fn)
+    val fscore = 2 * recall * precision / (recall + precision)
+    println(s"tp=$tp,fp=$fp,fn=$fn")
+    println(s"precision=$precision")
+    println(s"recall=$recall")
+    println(s"fscore=$fscore")
+    println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
+    ss.catalog.dropTempView("pred")
+    model
+  }
+
+  def trainLinearSVC(ss: SparkSession, data: DataFrame, maxIter: Int = 10): LinearSVCModel = {
+
+    val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
+    val lsvc = new LinearSVC()
+      .setMaxIter(maxIter)
+      .setRegParam(0.1)
+
+    // Fit the model
+    val lsvcModel = lsvc.fit(training)
+
+    // Print the coefficients and intercept for linear svc
+    println(s"Coefficients: ${lsvcModel.coefficients} Intercept: ${lsvcModel.intercept}")
+    lsvcModel
+  }
+
+  /**
    * 训练逻辑回归分类器
    *
    * @param ss   sparksession
    * @param data 用于训练的原始数据
    */
   def trainLR(ss: SparkSession, data: DataFrame, maxIter: Int = 10): LogisticRegressionModel = {
-    val Array(training, test) = data.randomSplit(Array(0.9, 0.1), seed = 12345)
+    val Array(training, test) = data.randomSplit(Array(0.8, 0.2), seed = 12345)
 
     val lr = new LogisticRegression()
       .setMaxIter(maxIter)
       .setFamily("binomial")
-
     //1: l2 ridge regression 0: l1 lasso regression
     //.setElasticNetParam(1)mkdir data
 
@@ -554,8 +575,8 @@ object TrainingUtil {
     val paramGrid = new ParamGridBuilder()
 
       .addGrid(lr.regParam, (0.01 to 0.1 by 0.01).toArray)
-      //.addGrid(lr.fitIntercept)
-      //.addGrid(lr.threshold,(0.4 to 0.7 by 0.1).toArray)
+      .addGrid(lr.fitIntercept)
+      //.addGrid(lr.threshold,(0.3 to 0.8 by 0.1).toArray)
       .addGrid(lr.elasticNetParam, (0.0 to 1.0 by 0.1).toArray)
       .build()
 
@@ -574,17 +595,18 @@ object TrainingUtil {
 
     //     Make predictions on test data. model is the model with combination of parameters
     //     that performed best.
-    //    val result = model.transform(test)
-    //      .filter("label==1.0")
-    //      .select("features", "label", "prediction")
+    val result = model.transform(test)
+      .filter("label==1.0")
+      .select("features", "label", "prediction")
     //result.show(numRows = 1000, truncate = false)
 
     val lrModel = model.bestModel.asInstanceOf[LogisticRegressionModel]
 
 
     //从训练好的逻辑回归模型中提取摘要
+    import ss.implicits._
 
-    //    val trainingSummary = lrModel.binarySummary
+    val trainingSummary = lrModel.binarySummary
 
     // 获得每次迭代的目标函数返回值，打印每次迭代的损失
     //    val objectiveHistory = trainingSummary.objectiveHistory
@@ -597,41 +619,36 @@ object TrainingUtil {
     //    println(s"areaUnderROC: ${trainingSummary.areaUnderROC}")
 
     //  设置模型阈值以最大化F-Measure
-    //    val fMeasure = trainingSummary.fMeasureByThreshold
+    val fMeasure = trainingSummary.fMeasureByThreshold
     //fMeasure.show(10)
-    //    val maxFMeasure = fMeasure.select(max("F-Measure")).head().getDouble(0)
-    //    val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
-    //      .select("threshold").head().getDouble(0)
+    val maxFMeasure = fMeasure.select(max("F-Measure")).head().getDouble(0)
+    val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
+      .select("threshold").head().getDouble(0)
     //
     //println(s"Coefficients: ${lrModel.coefficients} Intercept: ${lrModel.intercept}")
     //println(s"bestThreshold: $bestThreshold maxFMeasure: $maxFMeasure")
-    //lrModel.setThreshold(bestThreshold)
+    lrModel.setThreshold(bestThreshold)
     //    lrModel
-    //
-    //    result.createTempView("pred")
-    //    val fp = ss.sql("select * from pred where label!=prediction and label==0.0").count().toDouble
-    //
-    //    val tp = ss.sql("select * from pred where label==prediction and label==1.0").count().toDouble
-    //
-    //    val fn = ss.sql("select * from pred where label!=prediction and label==1.0").count().toDouble
-    //
-    //    val precision = tp / (tp + fp)
-    //    val recall = tp / (tp + fn)
-    //    val fscore = 2 * recall * precision / (recall + precision)
-    //    println(s"tp=$tp,fp=$fp,fn=$fn")
-    //    println(s"precision=$precision")
-    //    println(s"recall=$recall")
-    //    println(s"fscore=$fscore")
-    //    ss.catalog.dropTempView("pred")
-    println("coefficients", lrModel.coefficients)
-    println("intercept", lrModel.intercept)
-    println("threshold", lrModel.getThreshold)
-    println("ElasticNetParam", lrModel.getElasticNetParam)
-    println("regParam", lrModel.getRegParam)
+
+    result.createTempView("pred")
+    val fp = ss.sql("select * from pred where label!=prediction and label==0.0").count().toDouble
+
+    val tp = ss.sql("select * from pred where label==prediction and label==1.0").count().toDouble
+
+    val fn = ss.sql("select * from pred where label!=prediction and label==1.0").count().toDouble
+
+    val precision = tp / (tp + fp)
+    val recall = tp / (tp + fn)
+    val fscore = 2 * recall * precision / (recall + precision)
+    println(s"tp=$tp,fp=$fp,fn=$fn")
+    println(s"precision=$precision")
+    println(s"recall=$recall")
+    println(s"fscore=$fscore")
+    ss.catalog.dropTempView("pred")
     lrModel
   }
 
-  def trainByNB(ss: SparkSession, data: DataFrame): NaiveBayesModel = {
+  def trainNB(ss: SparkSession, data: DataFrame): NaiveBayesModel = {
     // Load and parse the data file.
     // Split data into training (60%) and test (40%).
     val Array(training, test) = data.randomSplit(Array(0.8, 0.2))
@@ -969,11 +986,6 @@ object TrainingUtil {
     trainWord2Vec(ss, corpus, modelSavePath = w2vSavePath)
   }
 
-  def checkLRModel(ss: SparkSession): Unit = {
-    loadLRModel("c:/users/jzy/desktop/lr") //从01两个簇中均匀采样训练的lr
-    loadLRModel("c:/users/jzy/desktop/lr_nosample") //未采样的
-    loadLRModel("c:/users/jzy/desktop/lr_sampled_from_cluster1") //仅从1簇采样的
-  }
 
   def getPidsByName(authorRaw: JSONObject, name: String): Array[String] = {
     val aidPids = authorRaw.getJSONObject(name)
@@ -1004,7 +1016,7 @@ object TrainingUtil {
     val corpus = loadCorpus(ss, textTxtPath = corpusPath)
     //    val corpus = loadCorpus(ss, textTxtPath = "d:/contest/text.txt", orgTxtPath ="d:/contest/org.txt",
     //    venueTxtPath = "d:/contest/venue.txt")
-    trainWord2Vec(ss, corpus, vectorSize=100,windowSize=3,minCount=3,modelSavePath = w2vSavePath)
+    trainWord2Vec(ss, corpus, vectorSize = 100, windowSize = 3, minCount = 3, modelSavePath = w2vSavePath)
     //    genW2VModel(ss, corpusPath, w2vSavePath)
     //    val word2VecModel = ss.sparkContext.broadcast(Word2VecModel.load(Settings.w2vModelPath))
     //    val pubs = ss.sparkContext.broadcast(JsonUtil.loadJson(Settings.pubsJsonPath))

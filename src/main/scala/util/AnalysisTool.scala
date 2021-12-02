@@ -5,8 +5,8 @@ import java.util.concurrent.Executors
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
-import main.AuthorNetwork
-import main.AuthorNetwork.{Label, Name, buildML, save}
+import network.AuthorNetwork
+import network.AuthorNetwork.{Label, Name, save}
 import org.apache.spark.graphx._
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.rdd.RDD
@@ -19,11 +19,11 @@ object AnalysisTool {
 
 
   /**
-    * 从指定的路径读取节点rdd文件和边rdd文件构建图
-    *
-    * @param path 节点和边rdd文件路径
-    * @return
-    */
+   * 从指定的路径读取节点rdd文件和边rdd文件构建图
+   *
+   * @param path 节点和边rdd文件路径
+   * @return
+   */
   def loadGraph(ss: SparkSession, path: String): Graph[String, Double] = {
     val vOut = path + "/out_v"
     val eOut = path + "/out_e"
@@ -41,11 +41,11 @@ object AnalysisTool {
   }
 
   /**
-    * 从图中获得某个名字对应的所有联通块节点id的RDD
-    *
-    * @param graph 作者网络
-    *
-    */
+   * 从图中获得某个名字对应的所有联通块节点id的RDD
+   *
+   * @param graph 作者网络
+   *
+   */
   def getComponentsRDD(graph: Graph[String, Double]): RDD[Array[Long]] = {
     val componentsRDD = graph.connectedComponents()
       .vertices.groupBy(_._2).map(
@@ -74,17 +74,18 @@ object AnalysisTool {
   }
 
   /**
-    * 找出某个作者名字对应的节点对
-    */
+   * 找出某个作者名字对应的节点对
+   */
   def getPairsByAuthorName(componentsRDD: RDD[Array[Long]]): Set[String] = {
     //    println("真实作者数:" + AuthorDao.getAuthorsNumByName(name))
     //    println("实验作者数:" + sum.toString)
+
     /**
-      * 两两组合名字相同节点对应的vIds
-      *
-      * @param vIds vertexId 数组
-      * @return
-      */
+     * 两两组合名字相同节点对应的vIds
+     *
+     * @param vIds vertexId 数组
+     * @return
+     */
     def combine(vIds: Array[Long]): Set[(Long, Long)] = {
       var result = Set[(Long, Long)]()
       for (i <- vIds.indices) {
@@ -99,11 +100,11 @@ object AnalysisTool {
     pairs.map(x => x.toString())
   }
 
-  def analyze(graph: Graph[String, Double], names: Array[String],pairs:RDD[(VertexId,VertexId,Label,Name)]): List[Array[String]] = {
+  def analyze(graph: Graph[String, Double], names: Array[String], pairs: RDD[(VertexId, VertexId, Label, Name)]): List[Array[String]] = {
     var records = List[Array[String]]()
     for (name <- names) {
       println(name)
-      records = records :+ analyzeByName(graph, name,pairs)
+      records = records :+ analyzeByName(graph, name, pairs)
       /*executor.execute(new Runnable() {
         final val n = name
         final val g = graph
@@ -124,88 +125,88 @@ object AnalysisTool {
 
 
   /**
-    * 计算精确度
-    *
-    * @param tp 预测结果中正确的pairwise数量
-    * @param fp 预测结果中错误的pairwise数量
-    * @return
-    */
+   * 计算精确度
+   *
+   * @param tp 预测结果中正确的pairwise数量
+   * @param fp 预测结果中错误的pairwise数量
+   * @return
+   */
   def computePrecision(tp: Int, fp: Int): Double = {
     val precision: Double = 1.0 * tp / (tp + fp)
     precision
   }
 
   /**
-    * 计算召回率
-    *
-    * @param tp 预测结果中正确的pairwise数量
-    * @param fn 预测结果中未找到的正确的pairwise数量
-    * @return
-    */
+   * 计算召回率
+   *
+   * @param tp 预测结果中正确的pairwise数量
+   * @param fn 预测结果中未找到的正确的pairwise数量
+   * @return
+   */
   def computeRecall(tp: Int, fn: Int): Double = {
     val recall: Double = 1.0 * tp / (tp + fn)
     recall
   }
 
   /**
-    * 计算fscore
-    *
-    * @param precision 查准率
-    * @param recall    召回率
-    * @return
-    */
+   * 计算fscore
+   *
+   * @param precision 查准率
+   * @param recall    召回率
+   * @return
+   */
   def computeFscore(precision: Double, recall: Double): Double = {
     val fscore = 2 * precision * recall / (precision + recall)
     fscore
   }
 
-//  /**
-//    * 写入实验得到的pairs到文件中
-//    *
-//    * @param pairs 实验得到的pairs
-//    * @param name  作者名字
-//    */
-//  def writePairsToFile(pairs: Set[(Long, Long)], name: String): Unit = {
-//    val filename = name +
-//      "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
-//    val writer = new PrintWriter(new File(System.getProperty("user.dir") + "/src/main/resources/exp/" + filename))
-//    //val writer = new PrintWriter(new File(outdirectory + filename))
-//    for (x <- pairs) {
-//      writer.write(x + "\n")
-//    }
-//    writer.close()
-//  }
+  //  /**
+  //    * 写入实验得到的pairs到文件中
+  //    *
+  //    * @param pairs 实验得到的pairs
+  //    * @param name  作者名字
+  //    */
+  //  def writePairsToFile(pairs: Set[(Long, Long)], name: String): Unit = {
+  //    val filename = name +
+  //      "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
+  //    val writer = new PrintWriter(new File(System.getProperty("user.dir") + "/src/main/resources/exp/" + filename))
+  //    //val writer = new PrintWriter(new File(outdirectory + filename))
+  //    for (x <- pairs) {
+  //      writer.write(x + "\n")
+  //    }
+  //    writer.close()
+  //  }
 
-//  /**
-//    * 读取文件中的pairs
-//    *
-//    * @param name 作者名字
-//    * @param kind 文件类型 true表示读取真实值 exp表示读取实验值
-//    * @return
-//    */
-//  def readPairsFromFile(name: String, kind: String): Set[String] = {
-//    var filename = ""
-//    if (kind.equals("exp")) {
-//      filename = name.replace(' ', '_') +
-//        "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
-//    } else if (kind.equals("true")) {
-//      filename = name.replace(' ', '_') + ".txt"
-//    }
-//    val file = Source.fromURL(this.getClass.getClassLoader.getResource("resources/" + kind + "/" + filename))
-//    //    val file = Source.fromFile(System.getProperty("user.dir") + "/src/main/resources/" + kind + "/" + filename)
-//    var data = Set[String]()
-//    for (line <- file.getLines()) {
-//      data += line.toString
-//    }
-//    data
-//  }
+  //  /**
+  //    * 读取文件中的pairs
+  //    *
+  //    * @param name 作者名字
+  //    * @param kind 文件类型 true表示读取真实值 exp表示读取实验值
+  //    * @return
+  //    */
+  //  def readPairsFromFile(name: String, kind: String): Set[String] = {
+  //    var filename = ""
+  //    if (kind.equals("exp")) {
+  //      filename = name.replace(' ', '_') +
+  //        "_a_" + Weight.alpha + "b_" + Weight.beta + "t_" + Weight.threshold + ".txt"
+  //    } else if (kind.equals("true")) {
+  //      filename = name.replace(' ', '_') + ".txt"
+  //    }
+  //    val file = Source.fromURL(this.getClass.getClassLoader.getResource("resources/" + kind + "/" + filename))
+  //    //    val file = Source.fromFile(System.getProperty("user.dir") + "/src/main/resources/" + kind + "/" + filename)
+  //    var data = Set[String]()
+  //    for (line <- file.getLines()) {
+  //      data += line.toString
+  //    }
+  //    data
+  //  }
 
   /**
-    * 读取真实pairwise
-    *
-    * @param name 作者名字
-    * @return
-    */
+   * 读取真实pairwise
+   *
+   * @param name 作者名字
+   * @return
+   */
   def readTruePairs(name: String): Set[(Long, Long)] = {
     val filename = name + ".txt"
     //val path = new Path("hdfs://localhost/user/csubigdata/namedis/true/" + filename)
@@ -227,12 +228,12 @@ object AnalysisTool {
   }
 
   /**
-    * 根据作者名字分析结果
-    *
-    * @param name 名字
-    *
-    */
-  def analyzeByName(graph: Graph[String, Double], name: String,pairs:RDD[(VertexId,VertexId,Label,Name)]): Array[String] = {
+   * 根据作者名字分析结果
+   *
+   * @param name 名字
+   *
+   */
+  def analyzeByName(graph: Graph[String, Double], name: String, pairs: RDD[(VertexId, VertexId, Label, Name)]): Array[String] = {
     val subGraph = graph.subgraph(epred = t => t.attr == 1.0,
       vpred = (id, str) => str.equalsIgnoreCase(name.replace("_", " ")))
     subGraph.vertices.take(3)
@@ -287,15 +288,16 @@ object AnalysisTool {
 
   def get2JumpPair(graph: Graph[String, Double]): Set[(Long, Long)] = {
     type VMap = Map[VertexId, Int] //定义每个节点存放的数据类型，为若干个（节点编号，一个整数）构成的map，当然发送的消息也得遵守这个类型
+
     /**
-      * 节点数据的更新 就是集合的union
-      */
+     * 节点数据的更新 就是集合的union
+     */
     def vprog(vid: VertexId, vdata: VMap, message: VMap) //每轮迭代后都会用此函数来更新节点的数据（利用消息更新本身），vdata为本身数据，message为消息数据
     : Map[VertexId, Int] = addMaps(vdata, message)
 
     /**
-      * 节点数据的更新 就是集合的union
-      */
+     * 节点数据的更新 就是集合的union
+     */
     def sendMsg(e: EdgeTriplet[VMap, _]): Iterator[(VertexId, Map[VertexId, PartitionID])] = {
       //取两个集合的差集  然后将生命值减1
       val srcMap = (e.dstAttr.keySet -- e.srcAttr.keySet).map { k => k -> (e.dstAttr(k) - 1) }.toMap
@@ -307,8 +309,8 @@ object AnalysisTool {
     }
 
     /**
-      * 消息的合并
-      */
+     * 消息的合并
+     */
     def addMaps(spmap1: VMap, spmap2: VMap): VMap =
       (spmap1.keySet ++ spmap2.keySet).map { //合并两个map，求并集
         k => k -> math.min(spmap1.getOrElse(k, Int.MaxValue), spmap2.getOrElse(k, Int.MaxValue)) //对于交集的点的处理，取spmap1和spmap2中最小的值

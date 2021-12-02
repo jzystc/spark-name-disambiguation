@@ -407,7 +407,7 @@ object AuthorNetwork {
     val subGraph = graph.subgraph(vpred = (id, authorName) => authorName.equalsIgnoreCase(
       name.replace("_", " ")), epred = t => t.attr == 1)
     val componentsRDD = AnalysisUtil.getComponentsRDD(subGraph) //.filter(_.length > 1)
-    for (arr <- componentsRDD if arr.length > 1) {
+    for (arr <- componentsRDD) {
       val filename = s"$path/${
         arr(0)
       }.txt"

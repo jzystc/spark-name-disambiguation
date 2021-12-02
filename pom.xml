@@ -17,25 +17,20 @@
     </dependencyManagement>
     <dependencies>
         <!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
-<!--        <dependency>-->
-<!--            <groupId>mysql</groupId>-->
-<!--            <artifactId>mysql-connector-java</artifactId>-->
-<!--            <version>5.1.47</version>-->
-<!--        </dependency>-->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
-            <version>2.7.7</version>
+            <version>3.2.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <version>2.7.7</version>
+            <version>3.2.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-hdfs</artifactId>
-            <version>2.7.7</version>
+            <version>3.2.2</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/net.sourceforge.javacsv/javacsv -->
         <dependency>
@@ -54,7 +49,39 @@
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
-            <version>1.2.60</version>
+            <version>1.2.78</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.spark</groupId>-->
+<!--            <artifactId>spark-core_2.12</artifactId>-->
+<!--            <version>3.0.3</version>-->
+<!--        </dependency>-->
+<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-sql &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.spark</groupId>-->
+<!--            <artifactId>spark-sql_2.12</artifactId>-->
+<!--            <version>3.0.3</version>-->
+<!--&lt;!&ndash;            <scope>provided</scope>&ndash;&gt;-->
+<!--        </dependency>-->
+<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-mllib &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.spark</groupId>-->
+<!--            <artifactId>spark-mllib_2.12</artifactId>-->
+<!--            <version>3.0.3</version>-->
+<!--&lt;!&ndash;            <scope>provided</scope>&ndash;&gt;-->
+<!--        </dependency>-->
+<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-graphx &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.spark</groupId>-->
+<!--            <artifactId>spark-graphx_2.12</artifactId>-->
+<!--            <version>3.0.3</version>-->
+<!--        </dependency>-->
+        <!-- https://mvnrepository.com/artifact/info.debatty/java-string-similarity -->
+        <dependency>
+            <groupId>info.debatty</groupId>
+            <artifactId>java-string-similarity</artifactId>
+            <version>1.2.1</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.scalatest/scalatest -->

@@ -231,14 +231,13 @@ object DataPreparation {
         },
         (
           //paperId
-          x(1).asInstanceOf[String],
+          x(1).asInstanceOf[String], {
           //authorId
-          {
-            if (x(2) != null)
-              x(2).asInstanceOf[String]
-            else
-              ""
-          },
+          if (x(2) != null)
+            x(2).asInstanceOf[String]
+          else
+            ""
+        },
           //authorName
           x(3).asInstanceOf[String],
           //org

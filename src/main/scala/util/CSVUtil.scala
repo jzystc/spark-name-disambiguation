@@ -5,8 +5,8 @@ import java.nio.charset.Charset
 import com.csvreader.{CsvReader, CsvWriter}
 
 /**
-  * 读取分析结果txt文件并输出到csv文件
-  */
+ * 读取分析结果txt文件并输出到csv文件
+ */
 object CSVUtil {
 
   val HEADER_REAL_EXP_PRF: Array[String] = Array[String]("name", "real num", "exp num", "precision", "recall", "f-score")
@@ -14,10 +14,10 @@ object CSVUtil {
   val HEADER_PRF: Array[String] = Array[String]("name", "precision", "recall", "f-score")
 
   /**
-    * 读取指定路径下的csv文件
-    *
-    * @param path 文件路径
-    */
+   * 读取指定路径下的csv文件
+   *
+   * @param path 文件路径
+   */
   def read(path: String, columns: Array[String]): Unit = {
     // 创建CSV读对象
     val csvReader = new CsvReader(path)
@@ -35,12 +35,12 @@ object CSVUtil {
 
 
   /**
-    *写入records到指定路径下的csv文件
-    *
-    * @param path    文件路径
-    * @param header  表头
-    * @param records 记录数组
-    */
+   * 写入records到指定路径下的csv文件
+   *
+   * @param path    文件路径
+   * @param header  表头
+   * @param records 记录数组
+   */
   def write(path: String, header: Array[String] = HEADER_EXP_PRF, records: List[Array[String]]) {
 
     // 创建CSV写对象 逗号作为分隔符
@@ -55,6 +55,4 @@ object CSVUtil {
     csvWriter.close()
 
   }
-
-
 }
