@@ -22,7 +22,7 @@ object AuthorNetwork {
    * 1. 2.0:合作者关系,1.0:link边两端节点已消歧,0-1:link边两端节点的相似度
    * 2 link边两端节点的文本和机构相似分数
    * 3 link边两端节点的层次(发表年份)缩放系数
-   **/
+   * */
   type YearSim = Double
   type Label = Double
   type OrgSim = Double
@@ -37,7 +37,7 @@ object AuthorNetwork {
    * 3.合作者相似度 重名合作者的平均机构相似分数
    * 4.标题与摘要的文本相似度
    * 5.发表年份相似度
-   **/
+   * */
   type EdgeAttr = (Label, OrgSim, CoauthorSim, TextSim, YearSim, VenueSim)
   type EdgeAttrWithoutYearSim = (Label, OrgSim, CoauthorSim, TextSim, VenueSim)
 

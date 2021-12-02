@@ -38,71 +38,18 @@
             <artifactId>javacsv</artifactId>
             <version>2.0</version>
         </dependency>
-
-        <!-- https://mvnrepository.com/artifact/info.debatty/java-string-similarity -->
-<!--        <dependency>-->
-<!--            <groupId>info.debatty</groupId>-->
-<!--            <artifactId>java-string-similarity</artifactId>-->
-<!--            <version>1.1.0</version>-->
-<!--        </dependency>-->
         <!-- https://mvnrepository.com/artifact/com.alibaba/fastjson -->
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
             <version>1.2.78</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-core_2.12</artifactId>-->
-<!--            <version>3.0.3</version>-->
-<!--        </dependency>-->
-<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-sql &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-sql_2.12</artifactId>-->
-<!--            <version>3.0.3</version>-->
-<!--&lt;!&ndash;            <scope>provided</scope>&ndash;&gt;-->
-<!--        </dependency>-->
-<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-mllib &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-mllib_2.12</artifactId>-->
-<!--            <version>3.0.3</version>-->
-<!--&lt;!&ndash;            <scope>provided</scope>&ndash;&gt;-->
-<!--        </dependency>-->
-<!--        &lt;!&ndash; https://mvnrepository.com/artifact/org.apache.spark/spark-graphx &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-graphx_2.12</artifactId>-->
-<!--            <version>3.0.3</version>-->
-<!--        </dependency>-->
         <!-- https://mvnrepository.com/artifact/info.debatty/java-string-similarity -->
         <dependency>
             <groupId>info.debatty</groupId>
             <artifactId>java-string-similarity</artifactId>
             <version>1.2.1</version>
         </dependency>
-
-        <!-- https://mvnrepository.com/artifact/org.scalatest/scalatest -->
-<!--        <dependency>-->
-<!--            <groupId>org.scalatest</groupId>-->
-<!--            <artifactId>scalatest_2.11</artifactId>-->
-<!--            <version>3.0.5</version>-->
-<!--            <scope>test</scope>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>junit</groupId>-->
-<!--            <artifactId>junit</artifactId>-->
-<!--            <version>4.12</version>-->
-<!--            <scope>test</scope>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>com.github.fommil.netlib</groupId>-->
-<!--            <artifactId>all</artifactId>-->
-<!--            <version>1.1.2</version>-->
-<!--            <type>pom</type>-->
-<!--        </dependency>-->
     </dependencies>
 
     <build>

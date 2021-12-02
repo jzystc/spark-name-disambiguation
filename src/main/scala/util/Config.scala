@@ -3,7 +3,7 @@ package util
 /**
  * paths to some necessary files
  */
-object Settings {
+object Config {
   val dataset = "kdd"
   val hdfsPrefix = "hdfs://datacsu1:9000/"
   val testJsonPath = s"/root/$dataset/name_test_100.json"

@@ -6,7 +6,7 @@ import network.AuthorNetwork.{dumpProbability, getDisambiguationResult}
 import org.apache.spark.ml.classification.LogisticRegressionModel
 import org.apache.spark.ml.feature.Word2VecModel
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import util.Settings._
+import util.Config._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
