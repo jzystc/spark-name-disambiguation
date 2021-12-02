@@ -2,6 +2,7 @@ package util
 
 import java.io.{File, FileOutputStream, PrintWriter}
 import com.alibaba.fastjson.JSONObject
+import network.AuthorNetwork
 import network.AuthorNetwork.{EdgeAttr, VertexAttr}
 import org.apache.spark.graphx.{Edge, EdgeRDD, Graph}
 import org.apache.spark.ml.classification.{RandomForestClassificationModel, RandomForestClassifier, _}
@@ -16,6 +17,7 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.{Source, StdIn}
+import scala.util.control.Breaks.{break, breakable}
 
 object TrainingUtil {
   def generateMissingFeaturePredictionTrainingData(ss: SparkSession, data: DataFrame): Unit = {
@@ -587,7 +589,7 @@ object TrainingUtil {
       .setEstimatorParamMaps(paramGrid)
       // 80% of the data will be used for training and the remaining 20% for validation.
       .setTrainRatio(0.8)
-      // Evaluate up to 2 parameter settings in parallel
+      // Evaluate up to 2 parameter Config in parallel
       .setParallelism(2)
 
     // Run train validation split, and choose the best set of parameters.
@@ -978,15 +980,6 @@ object TrainingUtil {
   }
 
 
-  def genW2VModel(ss: SparkSession,
-                  corpusPath: String,
-                  w2vSavePath: String): Unit = {
-    val corpus = loadCorpus(ss, textTxtPath = corpusPath)
-    //    val corpus = loadCorpus(ss, textTxtPath = "d:/contest/text.txt", orgTxtPath ="d:/contest/org.txt", venueTxtPath = "d:/contest/venue.txt")
-    trainWord2Vec(ss, corpus, modelSavePath = w2vSavePath)
-  }
-
-
   def getPidsByName(authorRaw: JSONObject, name: String): Array[String] = {
     val aidPids = authorRaw.getJSONObject(name)
     val aids = authorRaw.getJSONObject(name).keySet().toArray[String](Array[String]())
@@ -1011,36 +1004,34 @@ object TrainingUtil {
       .getOrCreate()
 
     val startTime = System.currentTimeMillis //获取开始时间
-    val w2vSavePath = "hdfs://datacsu1:9000/ad/word2vec"
+
     val corpusPath = "hdfs://datacsu1:9000/ad/corpus.txt"
     val corpus = loadCorpus(ss, textTxtPath = corpusPath)
-    //    val corpus = loadCorpus(ss, textTxtPath = "d:/contest/text.txt", orgTxtPath ="d:/contest/org.txt",
-    //    venueTxtPath = "d:/contest/venue.txt")
+    val w2vSavePath = "hdfs://datacsu1:9000/ad/word2vec"
     trainWord2Vec(ss, corpus, vectorSize = 100, windowSize = 3, minCount = 3, modelSavePath = w2vSavePath)
-    //    genW2VModel(ss, corpusPath, w2vSavePath)
-    //    val word2VecModel = ss.sparkContext.broadcast(Word2VecModel.load(Settings.w2vModelPath))
-    //    val pubs = ss.sparkContext.broadcast(JsonUtil.loadJson(Settings.pubsJsonPath))
-    //    val trainJson = ss.sparkContext.broadcast(JsonUtil.loadJson(Settings.trainJsonPath))
-    //    val venuesDF = DataPreparation.getVenueDF(ss, Settings.venuesJsonPath,
-    //      word2VecModel.value, 240).cache()
+    val word2VecModel = ss.sparkContext.broadcast(Word2VecModel.load(Config.w2vModelPath))
 
-    //    val names = trainJson.value.keySet().toArray[String](Array[String]())
-    //    var cnt = 1
-    //    for (name <- names) {
-    //      println(cnt, name)
-    //      breakable {
-    //        if (cnt > 100) break() else cnt += 1
-    //        val training = AuthorNetwork.getDataForFeaturePrediction(ss,
-    //          DataPreparation.prepare(ss, pubs.value, getPidsByName(trainJson.value, name),
-    //            name, word2VecModel.value, venuesDF, 240))
-    //        dumpDataForFeaturePrediction2Libsvm(ss, training, s"/root/${Settings.dataset}/fp", s"$name.txt")
-    //      }
-    //    }
-    //    genLibsvm(s"/root/${Settings.dataset}/fp", s"/root/${Settings.dataset}/fp.txt")
-    //    FileUtil.upload2hdfs(s"/root/${Settings.dataset}/fp.txt",s"${Settings.hdfsPrefix}/${Settings.dataset}/fp.txt")
-    //    val training = ss.read.format("libsvm").option("numFeatures", "4").load(s"${Settings.hdfsPrefix}/${Settings.dataset}/fp.txt")
-    //    val model = trainRegression(ss, training)
-    //    model.save(s"${Settings.hdfsPrefix}/${Settings.dataset}/fp")
+    val pubs = ss.sparkContext.broadcast(JsonUtil.loadJson(Config.pubsJsonPath))
+    val trainJson = ss.sparkContext.broadcast(JsonUtil.loadJson(Config.trainJsonPath))
+    val venuesDF = DataPreparation.getVenueDF(ss, Config.venuesJsonPath,
+      word2VecModel.value, 240).cache()
+    val names = trainJson.value.keySet().toArray[String](Array[String]())
+    var cnt = 1
+    for (name <- names) {
+      println(cnt, name)
+      breakable {
+        if (cnt > 100) break() else cnt += 1
+        val training = AuthorNetwork.getDataForFeaturePrediction(ss,
+          DataPreparation.prepare(ss, pubs.value, getPidsByName(trainJson.value, name),
+            name, word2VecModel.value, venuesDF, 240))
+        dumpDataForFeaturePrediction2Libsvm(ss, training, s"/root/${Config.dataset}/fp", s"$name.txt")
+      }
+    }
+    genLibsvm(s"/root/${Config.dataset}/fp", s"/root/${Config.dataset}/fp.txt")
+    FileUtil.upload2hdfs(s"/root/${Config.dataset}/fp.txt", s"${Config.hdfsPrefix}/${Config.dataset}/fp.txt")
+    val training = ss.read.format("libsvm").option("numFeatures", "4").load(s"${Config.hdfsPrefix}/${Config.dataset}/fp.txt")
+    val model = trainRegression(ss, training)
+    model.save(s"${Config.hdfsPrefix}/${Config.dataset}/fp")
     val endTime = System.currentTimeMillis //获取结束时间
     System.out.println("Running Time: " + (endTime - startTime) / 1000 / 60 + "min")
     ss.stop()

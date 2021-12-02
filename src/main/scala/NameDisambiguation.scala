@@ -275,8 +275,6 @@ object NameDisambiguation {
 
   def main(args: Array[String]): Unit = {
     // 初始化SparkSession
-
-
     val ss: SparkSession = SparkSession.builder()
       .appName("Author Disambiguation")
       //      .config("spark.sql.broadcastTimeout", "36000")
@@ -286,7 +284,7 @@ object NameDisambiguation {
       .getOrCreate()
     val startTime = System.currentTimeMillis //获取开始时间
     genTrainingData(ss, w2vModelPath, pubsJsonPath, trainJsonPath, venuesJsonPath, libsvmSavePath,
-      true, 360, 100, 0)
+      balance = true, 360, 100, 0)
     ss.sparkContext.getPersistentRDDs.foreach(x => x._2.unpersist())
     println("generate libsvm.txt...")
     TrainingUtil.genLibsvm(libsvmSavePath, unionLibsvmPath)
@@ -308,7 +306,7 @@ object NameDisambiguation {
     //    disambiguateByName(ss, 3, "d:/sigir2020/word2vec/word2vec_100",
     //      "d:/sigir2020/kdd/global/clean_pubs.json", "d:/sigir2020/kdd/name_test_100.json",
     //      "d:/sigir2020/kdd/clean_venues.json", "d:/sigir2020/kdd/clf/lr",
-    //      "song_chen", 0.9,"d:/")
+    //      "song_chen", 0.9, "d:/")
     val endTime = System.currentTimeMillis //获取结束时间
     System.out.println("Running Time: " + (endTime - startTime) / 1000 / 60 + "min")
     ss.stop()

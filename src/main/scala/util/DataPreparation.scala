@@ -314,34 +314,18 @@ object DataPreparation {
       .appName(this.getClass.getName)
       //若在本地运行需要设置为local
       .config("spark.executor.memory", "6g")
-      .master("local[1]")
+      .master("local[*]")
       .getOrCreate()
     val word2VecModel = Word2VecModel.load("D:/vmshare/word2vec_100")
-
-    //    //    val jsonPath = "D:\\Users\\jzy\\Documents\\PycharmProjects\\dataprocessing\\author-disambiguation\\result2.json"
     val pubsJsonPath = "D:/sigir2020/kdd/clean_pubs.json"
-
     val pubs = JsonUtil.loadJson(pubsJsonPath)
     val name = "huibin_xu"
-    val aidPids = JsonUtil.loadJson("d:/sigir2020/kdd/name_train_500.json").getJSONObject(name)
-
-    //    val venueJsonPath = "D:/na-contest/venues.json"
-    //    //    val savePath = "D:\\Users\\jzy\\Documents\\PycharmProjects\\dataprocessing\\author-disambiguation"
-    //    val savePath = "D:/na-contest/sna"
-    //    //    val name = "test_pubs"
-    //    val pubs = JsonUtil.loadJson(pubsJsonPath)
-    //    val venues=JsonUtil.loadJson(venueJsonPath)
-    //    prepare(ss, pubs, name, word2VecModel, venueJsonPath, 30)\
+    val aid2Papers = JsonUtil.loadJson("d:/sigir2020/kdd/name_train_500.json").getJSONObject(name)
     val venueTextPath = "d:/sigir2020/kdd/clean_venues.json"
-    //    val df = ss.read.format("json").load(venueTextPath)
     val venueDF = getVenueDF(ss, venueTextPath, word2VecModel, 1)
-    val graph = DataPreparation.prepareForTraining(ss, pubs, aidPids, name, word2VecModel, venueDF, 1)
-    //        val trainingData = AuthorNetwork.trainingTextAndVenue(graph)
+    val graph = DataPreparation.prepareForTraining(ss, pubs, aid2Papers, name, word2VecModel, venueDF, 1)
     val trainingData = AuthorNetwork.training(ss, graph)
     print(trainingData.count())
-    //    import ss.implicits._
-    //    val trainingDataDF = trainingData.map(x => edge(x.attr._1, Seq[Double](x.attr._2, x.attr._3, x.attr._4, x.attr._5, x.attr._6))).toDF()
-    //    trainingDataDF.show()
     ss.close()
   }
 }
